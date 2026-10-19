@@ -24,12 +24,23 @@ public static class HandBelief
     // Hands sampled for an opponent without deck data (tournament players, unknown NPCs).
     public const int UnknownOpponentSamples = 8;
 
+    // Hands sampled under Draft, where every hidden slot's rarity is known.
+    public const int DraftSamples = 16;
+
+    // A drafted deck is one card of each rarity, dealt in the draft window's order: hand slot i
+    // holds a card of DraftStars[i] stars (all 8 decks of the 2026-10-19 tournament, and every
+    // card revealed from a hand slot during its matches).
+    public static readonly byte[] DraftStars = [3, 5, 2, 4, 1];
+
     public static BeliefResult Build(MatchView view, NpcDeck? npc, CardCatalog catalog)
     {
         var redHand = view.Red.Select(s => s.State == SlotState.Visible ? s.Card : (CardStats?)null).ToArray();
         var hiddenSlots = Enumerable.Range(0, view.Red.Length).Where(i => view.Red[i].State == SlotState.Hidden).ToList();
         if (hiddenSlots.Count == 0)
             return new BeliefResult([new Hypothesis(redHand, 1, "all red cards visible")], "red hand fully visible");
+        // Draft replaces every deck, a tournament NPC's sheet deck included.
+        if (view.Rules.Has(TriadRule.Draft))
+            return SampleDraft(view, redHand, hiddenSlots, catalog);
         if (npc is null)
             return SampleUnknown(view, redHand, hiddenSlots, catalog);
 
@@ -119,6 +130,31 @@ public static class HandBelief
         return Assemble(redHand, hiddenSlots, unknowns, $"unknown opponent (no deck data): {unknowns.Count} sampled hand(s), lower confidence");
     }
 
+    // Draft: each hidden slot gets a random card of its slot's rarity. Cards are not excluded for
+    // being seen elsewhere (two drafted decks can share a card). Swap moves a card between slots and
+    // Sudden Death redeals from the board, so both break the slot order: sample as unknown then.
+    private static BeliefResult SampleDraft(MatchView view, CardStats?[] redHand, List<int> hiddenSlots, CardCatalog catalog)
+    {
+        if (view.Round > 0 || view.Rules.Has(TriadRule.Swap) || view.Red.Length != DraftStars.Length)
+            return SampleUnknown(view, redHand, hiddenSlots, catalog);
+        var byStars = catalog.All.OrderBy(c => c.Id).GroupBy(c => c.Stars).ToDictionary(g => g.Key, g => g.ToList());
+        if (hiddenSlots.Any(i => !byStars.ContainsKey(DraftStars[i])))
+            return new BeliefResult([], "Draft: the card list has no card of a hidden slot's rarity");
+
+        var rng = new Random(StableHash(view.Fingerprint()));
+        var unknowns = new List<IReadOnlyList<CardStats>>();
+        for (var n = 0; n < DraftSamples; n++)
+        {
+            unknowns.Add(hiddenSlots.Select(i =>
+            {
+                var tier = byStars[DraftStars[i]];
+                return tier[rng.Next(tier.Count)].Stats;
+            }).ToList());
+        }
+
+        return Assemble(redHand, hiddenSlots, unknowns, "Draft (one card per rarity, slot order 3-5-2-4-1 stars): sampled, lower confidence", keepOrder: true);
+    }
+
     private static int StableHash(string text)
     {
         unchecked
@@ -165,12 +201,14 @@ public static class HandBelief
     }
 
     // Fills the hidden slots of each candidate and merges candidates that are the same hand.
-    private static BeliefResult Assemble(CardStats?[] redHand, List<int> hiddenSlots, List<IReadOnlyList<CardStats>> unknowns, string status)
+    // keepOrder: the candidates list a card per hidden slot in slot order; otherwise they are
+    // unordered sets and the cards are laid into the hidden slots sorted.
+    private static BeliefResult Assemble(CardStats?[] redHand, List<int> hiddenSlots, List<IReadOnlyList<CardStats>> unknowns, string status, bool keepOrder = false)
     {
         var merged = new Dictionary<string, (CardStats?[] Hand, double Weight)>();
         foreach (var unknown in unknowns)
         {
-            var ordered = unknown.OrderBy(c => c.ToString(), StringComparer.Ordinal).ToList();
+            var ordered = keepOrder ? unknown.ToList() : unknown.OrderBy(c => c.ToString(), StringComparer.Ordinal).ToList();
             var key = string.Join(" ", ordered);
             if (merged.TryGetValue(key, out var existing))
             {

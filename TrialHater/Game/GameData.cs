@@ -12,12 +12,13 @@ public sealed class GameData
     // ENpcData values in this range are TripleTriad sheet rows (event handler type 0x23).
     private const uint TriadHandlerType = 0x23;
 
-    private GameData(CardCatalog cards, NpcCatalog npcs, Dictionary<uint, uint> npcBaseToTriad, Dictionary<TriadRule, string> ruleNames)
+    private GameData(CardCatalog cards, NpcCatalog npcs, Dictionary<uint, uint> npcBaseToTriad, Dictionary<TriadRule, string> ruleNames, List<RuleSet> tournamentRules)
     {
         this.Cards = cards;
         this.Npcs = npcs;
         this.NpcBaseToTriad = npcBaseToTriad;
         this.RuleNames = ruleNames;
+        this.TournamentRules = tournamentRules;
     }
 
     public CardCatalog Cards { get; }
@@ -29,6 +30,9 @@ public sealed class GameData
 
     // Rule names in the client language, as the match windows print them.
     public IReadOnlyDictionary<TriadRule, string> RuleNames { get; }
+
+    // TripleTriadTournament rows 1..N (index 0 = row 1): the Open Tournament rotation.
+    public IReadOnlyList<RuleSet> TournamentRules { get; }
 
     public NpcDeck? NpcForBase(uint baseId)
         => this.NpcBaseToTriad.TryGetValue(baseId, out var triad) ? this.Npcs.Get(triad) : null;
@@ -124,6 +128,16 @@ public sealed class GameData
                 ruleNames[(TriadRule)rule.RowId] = name;
         }
 
-        return new GameData(new CardCatalog(cards), new NpcCatalog(decks), baseToTriad, ruleNames);
+        // Unnamed columns: Unknown0..3 are TripleTriadRule ids (0 = none).
+        var tournamentRules = new List<RuleSet>();
+        foreach (var row in data.GetExcelSheet<TripleTriadTournament>())
+        {
+            if (row.RowId == 0)
+                continue;
+            var ids = new[] { Convert.ToInt32(row.Unknown0), Convert.ToInt32(row.Unknown1), Convert.ToInt32(row.Unknown2), Convert.ToInt32(row.Unknown3) };
+            tournamentRules.Add(RuleSet.Of(ids.Where(id => id is > 0 and <= (int)TriadRule.Draft).Select(id => (TriadRule)id)));
+        }
+
+        return new GameData(new CardCatalog(cards), new NpcCatalog(decks), baseToTriad, ruleNames, tournamentRules);
     }
 }

@@ -24,7 +24,7 @@ internal sealed class MatchJournal
     public void MatchEnded(MatchTracker tracker, NpcDeck? npc, int blueCards, int autoPlayed)
     {
         var outcome = blueCards > 5 ? "win" : blueCards == 5 ? "draw" : "loss";
-        var name = (npc?.Name ?? string.Empty).Replace(',', ' ');
+        var name = (npc?.Name ?? tracker.Opponent ?? string.Empty).Replace(',', ' ');
         this.Append("matches.csv", MatchHeader,
             $"{DateTime.UtcNow:O},{tracker.NpcTriadId},{name},{tracker.Rules.ToString().Replace(", ", "+")},{tracker.Round},{blueCards},{outcome},{autoPlayed}");
     }

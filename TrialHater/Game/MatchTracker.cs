@@ -46,8 +46,12 @@ public sealed class MatchTracker
     // Every NPC placement with the view it was made from (opponent-model fitting).
     public event Action<MatchView, CardStats, int>? RedMoved;
 
-    // Once per match, when the result window opens: Blue's final card count (6+ wins).
+    // Once per match, when the result window opens (or a full board closes without one, as in
+    // tournaments): Blue's final card count (6+ wins).
     public event Action<int>? MatchEnded;
+
+    // The opponent's name as the board shows it (AtkValues[4]), kept after the board closes.
+    public string? Opponent { get; private set; }
 
     public void Reset()
     {
@@ -59,6 +63,7 @@ public sealed class MatchTracker
         this.rules = RuleSet.Empty;
         this.Round = 0;
         this.NpcTriadId = 0;
+        this.Opponent = null;
         this.Warning = null;
         this.swapResolved = false;
         this.redForeign = new();
@@ -74,17 +79,13 @@ public sealed class MatchTracker
     public void Update(BoardFrame? frame, bool resultVisible, GameData data, Func<IReadOnlyList<CardStats[]>> savedDecks)
     {
         if (resultVisible && this.InMatch && !this.Ended)
-        {
-            this.Ended = true;
-            var final = this.previous;
-            var score = final is null ? -1 : final.Board.Count(s => s.HasCard && s.Owner == 1) + final.BlueInHand;
-            this.Note($"result window open: {score}/10 cards ({(score > 5 ? "win" : score == 5 ? "draw" : "loss")})");
-            if (score >= 0)
-                this.MatchEnded?.Invoke(score);
-        }
+            this.End("result window open");
 
         if (frame is null || !frame.Visible)
         {
+            // Tournament matches have no result window: the board just closes on the final position.
+            if (this.InMatch && !this.Ended && this.previous is { Visible: true, OnBoard: 9 })
+                this.End("board closed on a full board");
             if (this.InMatch)
                 this.Note("board closed");
             this.InMatch = false;
@@ -106,6 +107,8 @@ public sealed class MatchTracker
         }
 
         this.ParseRules(frame, data);
+        if (frame.OpponentName is { Length: > 0 } opponent)
+            this.Opponent = opponent;
         if (this.previous is { } before && before.Visible)
             this.TrackChanges(before, frame);
 
@@ -114,6 +117,16 @@ public sealed class MatchTracker
 
         this.previous = frame;
         this.View = this.BuildView(frame);
+    }
+
+    private void End(string why)
+    {
+        this.Ended = true;
+        var final = this.previous;
+        var score = final is null ? -1 : final.Board.Count(s => s.HasCard && s.Owner == 1) + final.BlueInHand;
+        this.Note($"{why}: {score}/10 cards ({(score > 5 ? "win" : score == 5 ? "draw" : "loss")})");
+        if (score >= 0)
+            this.MatchEnded?.Invoke(score);
     }
 
     private void StartMatch(BoardFrame frame)

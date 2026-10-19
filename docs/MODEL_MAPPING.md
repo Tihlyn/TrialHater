@@ -73,3 +73,83 @@ A rematch goes Result → Request → deck → board without the NPC menu or Tal
 | `AgentTripleTriad` (id 174) | Changes every frame. In the first 0x400 bytes, `+0x19C`/`+0x1A0` held a `(slot, cell)` pair per move: (0,3), (1,4), (4,8), (4,0), each matching a placement logged around it, and -1 when idle. `+0x188`/`+0x190` were small counters; `+0x1A8` changed most frames (a timer?). Card data was not seen in the first 0x400 bytes; the agent is larger. |
 
 Next: watch the agent beyond 0x400, and look for the NPC's hand (card ids) before it is revealed.
+
+## Session 5: 2026-10-19, Open Tournament Official (Gold Saucer): the schedule
+
+### Menu path
+
+| Step | Addon | Action | Callback |
+|---|---|---|---|
+| Greeting ("Welcome to Card Squa…", speaker "Open Tournament Offi…") | `Talk` | MouseClick | none |
+| Menu | `SelectString` | `[2]` prompt (e.g. "Open tournament registration closed.\nNext tournament begins in 4 minutes."), `[5]` entry count = 4, entries from `[7]`: 0 "Sign up for an Open tournament.", 1 "View the Open tournament schedule.", 2 "View tournament mode explanations.", 3 "Cancel." | `[k]` |
+| Sign up while closed | `Talk` | "I'm terribly sorry, …" then "You are more than we…", 2 clicks, back to the menu | none |
+| View schedule | `TripleTriadSchedule` | read-only list; close with the window's close button (Window component node 7 → button 7, `ButtonClick` 2) | none seen |
+
+### `TripleTriadSchedule` (`AddonTripleTriadSchedule`, agent `TripleTriadSchedule`, 26 AtkValues)
+
+| Index | Content |
+|---|---|
+| `[0]` | UInt 2 (meaning unknown; constant in the one capture) |
+| `[1 + 2k]` | start time of tournament k in **local client time**, `"MM/dd H:mm "` (trailing space), k = 0..9, every 2 hours, the next tournament first |
+| `[2 + 2k]` | `"★Basic Ruleset\nDraft"` or `"★Advanced Ruleset\nDraft/<rule>\n<rule>"`: rule names in the client language, after the first line split on `/` and `\n` (some entries are ManagedString, same text) |
+| `[21..24]` | undefined |
+| `[25]` | UInt 10, entry count |
+
+Nodes: header texts 3 "Date/Time", 4 "Rules"; list component node 5 (`ListItemRenderer` rows 4, 41001–41007, time text node 2, rules text node 3); `ListItemClick` exists but selecting a row did nothing visible.
+
+### The schedule comes from the `TripleTriadTournament` sheet
+
+`TripleTriadTournament` has 10 rows of 4 rule ids (`TripleTriadRule`). The odd rows are `[15]` (Draft, the basic ruleset) and the even rows are Draft plus two rules:
+
+| Row | Rules |
+|---|---|
+| 1, 3, 5, 7, 9 | Draft |
+| 2 | Draft, Same, Three Open |
+| 4 | Draft, Ascension, Fallen Ace |
+| 6 | Draft, Plus, Same |
+| 8 | Draft, Reverse, Three Open |
+| 10 | Draft, Plus, Swap |
+
+The rows run in order, one per two-hour slot, starting on odd UTC hours. All 10 entries of the capture fit this formula, with the start time in UTC:
+
+```
+row = ((unix_seconds / 7200) + 3) % 10 + 1
+```
+
+For example, 2026-10-20 01:00 UTC (03:00 local, UTC+2) gives row 6, Draft/Plus/Same, and 17:00 UTC gives row 4, Draft/Ascension/Fallen Ace. This is fitted from one capture (10/20 01:00–19:00 local). Recheck it against a schedule from another day before relying on it. The column order of the sheet matches the displayed order. `TripleTriadCompetition` holds only the four named tournament names (Manderville, Spinner's Pull, Durai, Rowena Cup) ×6 and plays no part here.
+
+## Session 6: 2026-10-19 23:00 UTC, Open Tournament (basic ruleset: Draft), 8 players, the rest filled with NPCs
+
+Result: 2nd of 8, 4 points, +2 captures. Round 1 lost 4-6 to Prideful Stag (played by hand after the plugin stalled), round 2 won 7-3 against Wyra "Greenhands" Lyehga, round 3 won 6-4 against Flichoirel the Lordling (both auto-played). ProbeReplay: all 3 matches replay with 0 mismatches.
+
+### Draft: `TripleTriadPickUpDeckSelect` (81 AtkValues), then `TripleTriadDeckConfirmation` (28)
+
+| Index | Content |
+|---|---|
+| `[0]` | 2 |
+| `[1]` | "Draft" |
+| `[3 + 5k]`, k = 0..14 | card image icon, **87000 + card id** |
+| `[4 + 5k]` | stars |
+| `[5 + 5k]` | type (0 none, 1 Primal, 2 Scion, 3 Beastman, 4 Garlean) |
+| `[6 + 5k]` | sides packed as bytes, high to low: `right, left, bottom, top` |
+| `[77]` | "Time Remaining: m:ss" (2:00 to start; refreshed every second) |
+
+The 15 offered cards come three per rarity, interleaved by position (3★ at 0/2/4, 5★ at 1/3/5, 2★ at 6/8/10, 4★ at 7/9/11, 1★ at 12–14). The player picks one per rarity. Picking cards sent no callback. The callbacks were `[1]` and `[2]` (5 s apart, button meaning not yet known), then `[-2]` to close. `DeckConfirmation` lists the 5 picks as `(name, 87000 + id, stars, type, packed sides)` in stride 5 from `[0]`, with the timer at `[25]`. Confirming sends `[0]`, then `[-2]`.
+
+**Drafted deck order:** the hand is dealt in the order 3★, 5★, 2★, 4★, 1★ (slot 0..4), for us and for the opponent. Every card revealed from a red hand slot in the 3 matches had its slot's rarity. `HandBelief` uses this: under Draft each hidden slot is sampled from the cards of its rarity (16 samples), and any NPC sheet deck is ignored.
+
+### Tournament windows
+
+| Addon | Values | Callbacks |
+|---|---|---|
+| `TripleTriadTournamentMatchList` (74) | `[1]` countdown, `[2]` status line, `[3]` "Round N Match Lineup", `[5..8]` table names; per player stride 8 from `[9]`: name, 2 bools (the first two are `true` for the local player), content id, "Points: n", "Captures: n", state (2 waiting, 9 win, 10 lose), state text | `[-2]` (close) |
+| `TripleTriadTournamentResult` (97) | `[0]` round count?, `[1]` 3, per player stride 11 from `[2]`: rank, name, points, captures, **5 deck cards as 88000 + id**, 2 bools (the first is `true` for the local player) | `[5]`, then `[2, false]` |
+| `TripleTriadTournamentReward` (12) | `[1]` "1,000 MGP", `[2]` " x 150 ", `[4]` "600 MGP", `[5]` 1600 total, `[6]` 10130, `[8]` 27661 (item ids?) | `[1]`, then `[0, false]` |
+
+Scoring: a win is worth 2 points, a draw 1, a loss 0. Captures = the sum of (cards - 5). Every player's drafted deck (results window) was one card of each rarity.
+
+A tournament match has **no `TripleTriadResult`**: the board closes on the final position. `MatchTracker` now ends a match when a full board closes without a result window.
+
+### Why match 1 stalled
+
+The plugin identified Prideful Stag from the target (TripleTriad 2293864, a tournament row with its own sheet deck) and built the hand belief from that deck. Draft replaces the deck: the first card the NPC played (5563, Beastman) was not in the sheet pool, the belief became unusable, and auto play waited with "no playable decision" (not logged then; refusals are now logged once per reason). Draft now ignores NPC decks. Name lookup also cannot resolve tournament NPCs: names like "Wyra "Greenhands" Lyehga" exist twice in the sheet (world NPC + tournament row), so `NpcByName` returns nothing and the opponent is sampled.

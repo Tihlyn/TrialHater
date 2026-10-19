@@ -34,6 +34,8 @@ public sealed class AutoPlayer
 
     public int Placed { get; private set; }
 
+    private string? lastRefusal;
+
     // Called every frame; `dispatch` performs the placement and is called at most once per turn
     // (twice if the first send was visibly ignored).
     public void Tick(MatchTracker tracker, Decision? decision, int delayMs, DateTime now, Func<int, int, DispatchResult> dispatch)
@@ -103,32 +105,32 @@ public sealed class AutoPlayer
 
         if (decision.Status != DecisionStatus.Ready || decision.Move is not { } move)
         {
-            this.Status = $"our turn: no playable decision ({decision.Status}: {decision.Reason})";
+            this.Refuse($"our turn: no playable decision ({decision.Status}: {decision.Reason})");
             return;
         }
 
         var slot = frame.Blue[move.HandSlot];
         if (!slot.HasCard || slot.Hidden)
         {
-            this.Status = $"refused: slot {move.HandSlot} holds no card";
+            this.Refuse($"refused: slot {move.HandSlot} holds no card");
             return;
         }
 
         if (frame.Board[move.Cell].HasCard)
         {
-            this.Status = $"refused: cell {move.Cell} is taken";
+            this.Refuse($"refused: cell {move.Cell} is taken");
             return;
         }
 
         if (frame.Command == BoardFrame.CommandPlayerActsForced && view.ForcedSlot < 0)
         {
-            this.Status = $"refused: the game forces a card but its slot is unreadable ({frame.Arg2})";
+            this.Refuse($"refused: the game forces a card but its slot is unreadable ({frame.Arg2})");
             return;
         }
 
         if (view.ForcedSlot >= 0 && move.HandSlot != view.ForcedSlot)
         {
-            this.Status = $"refused: the game forces slot {view.ForcedSlot}";
+            this.Refuse($"refused: the game forces slot {view.ForcedSlot}");
             return;
         }
 
@@ -136,7 +138,7 @@ public sealed class AutoPlayer
         this.LastDispatch = result.Detail;
         if (!result.Sent)
         {
-            this.Status = $"refused: {result.Detail}";
+            this.Refuse($"refused: {result.Detail}");
             return;
         }
 
@@ -146,5 +148,15 @@ public sealed class AutoPlayer
         this.Placed++;
         this.Status = $"played {move}";
         this.log($"[Auto] {result.Detail} ({decision.Reason}; {decision.Hypotheses} hand(s), {decision.Elapsed.TotalMilliseconds:0} ms)");
+    }
+
+    // A turn we will not play is logged once per distinct reason, so a stall is visible in the log.
+    private void Refuse(string status)
+    {
+        this.Status = status;
+        if (status == this.lastRefusal)
+            return;
+        this.lastRefusal = status;
+        this.log($"[Auto] {status}");
     }
 }

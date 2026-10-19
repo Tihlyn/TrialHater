@@ -4,6 +4,8 @@ using Dalamud.Interface.Windowing;
 using TrialHater.Core.Engine;
 using TrialHater.Core.Match;
 using TrialHater.Core.Policy;
+using TrialHater.Core.Rules;
+using TrialHater.Core.Tournament;
 
 namespace TrialHater.Windows;
 
@@ -42,6 +44,7 @@ public sealed class MainWindow : Window
 
         this.DrawHeader();
         this.DrawSession();
+        this.DrawTournaments();
         var tracker = this.plugin.Tracker;
         if (tracker.View is not { } view)
         {
@@ -73,7 +76,10 @@ public sealed class MainWindow : Window
 
         var tracker = plugin.Tracker;
         var npc = plugin.CurrentNpc;
-        ImGui.TextUnformatted($"NPC: {npc?.Name ?? (tracker.NpcTriadId == 0 ? "unknown (target the NPC before challenging)" : $"#{tracker.NpcTriadId}")}");
+        if (npc is null && tracker.InMatch && tracker.Opponent is { } opponent)
+            ImGui.TextUnformatted($"Opponent: {opponent} ({(tracker.Rules.Has(TriadRule.Draft) ? "drafted deck" : "no deck data")}, hidden cards sampled)");
+        else
+            ImGui.TextUnformatted($"NPC: {npc?.Name ?? (tracker.NpcTriadId == 0 ? "unknown (target the NPC before challenging)" : $"#{tracker.NpcTriadId}")}");
         if (tracker.InMatch)
         {
             ImGui.TextUnformatted($"Match #{tracker.MatchGeneration}{(tracker.Round > 0 ? $", Sudden Death round {tracker.Round}" : string.Empty)} | rules: {tracker.Rules}");
@@ -127,6 +133,21 @@ public sealed class MainWindow : Window
         if (session.LastAction.Length > 0)
             ImGui.TextColored(MutedColor, $"last: {session.LastAction}");
     }
+
+    // The next Open Tournaments (Gold Saucer), computed from the sheet rotation, in local time.
+    private void DrawTournaments()
+    {
+        var rows = this.plugin.Data!.TournamentRules;
+        if (rows.Count == 0 || !ImGui.CollapsingHeader("Open Tournament schedule"))
+            return;
+        foreach (var t in OpenTournament.Upcoming(rows, DateTimeOffset.UtcNow, 10))
+        {
+            var advanced = t.Rules.Rules.Count() > 1;
+            ImGui.TextColored(advanced ? GoodColor : MutedColor, $"{t.StartUtc.ToLocalTime():ddd HH:mm}  {string.Join(", ", t.Rules.Rules.Select(this.RuleName))}");
+        }
+    }
+
+    private string RuleName(TriadRule rule) => this.plugin.Data!.RuleNames.GetValueOrDefault(rule, rule.ToString());
 
     private void DrawBoard(MatchView view, Move? recommended)
     {

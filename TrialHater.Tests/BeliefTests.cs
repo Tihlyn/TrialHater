@@ -88,7 +88,7 @@ public class BeliefTests
     public void AnUnknownOpponentGetsLegalSampledHands()
     {
         var red = new[] { HandSlot.Of(C("AAAA")), HandSlot.Hidden, HandSlot.Hidden, HandSlot.Empty, HandSlot.Hidden };
-        var view = new MatchView(RuleSet.Of(TriadRule.Draft), EmptyBoard(), BlueHand(), red, Side.Blue);
+        var view = new MatchView(RuleSet.Of(TriadRule.Plus), EmptyBoard(), BlueHand(), red, Side.Blue);
         var belief = HandBelief.Build(view, null, Catalog);
         Assert.InRange(belief.Hypotheses.Count, 1, HandBelief.UnknownOpponentSamples);
         Assert.Equal(1.0, belief.Hypotheses.Sum(h => h.Weight), 9);
@@ -101,6 +101,37 @@ public class BeliefTests
 
         // Same view, same samples: decisions do not flicker between frames.
         Assert.Equal(belief.Hypotheses.Select(h => h.Description), HandBelief.Build(view, null, Catalog).Hypotheses.Select(h => h.Description));
+    }
+
+    [Fact]
+    public void DraftFillsEachHiddenSlotWithACardOfItsRarity()
+    {
+        // Slot 1 (5 stars) already played, slot 2 (2 stars) shown.
+        var red = new[] { HandSlot.Hidden, HandSlot.Empty, HandSlot.Of(C("5563/Beastman")), HandSlot.Hidden, HandSlot.Hidden };
+        var view = new MatchView(RuleSet.Of(TriadRule.Draft), EmptyBoard(), BlueHand(), red, Side.Blue);
+        var belief = HandBelief.Build(view, null, Catalog);
+        Assert.InRange(belief.Hypotheses.Count, 2, HandBelief.DraftSamples);
+        Assert.Equal(1.0, belief.Hypotheses.Sum(h => h.Weight), 9);
+        foreach (var h in belief.Hypotheses)
+        {
+            Assert.Null(h.RedHand[1]);
+            Assert.Equal(C("5563/Beastman"), h.RedHand[2]);
+            foreach (var slot in new[] { 0, 3, 4 })
+                Assert.Contains(HandBelief.DraftStars[slot], Catalog.WithStats(h.RedHand[slot]!.Value).Select(c => c.Stars));
+        }
+    }
+
+    [Fact]
+    public void DraftIgnoresTheNpcsSheetDeck()
+    {
+        // Tournament match 1 (2026-10-19): the plugin took Prideful Stag's sheet deck, the drafted
+        // card 5563 did not fit it, and the turn stalled on "no belief".
+        var npc = Npcs.Get(2293864)!;
+        var red = new[] { HandSlot.Hidden, HandSlot.Hidden, HandSlot.Empty, HandSlot.Hidden, HandSlot.Hidden };
+        var view = View(npc, red, [C("5563/Beastman")]) with { Rules = RuleSet.Of(TriadRule.Draft) };
+        var belief = HandBelief.Build(view, npc, Catalog);
+        Assert.True(belief.Usable, belief.Status);
+        Assert.StartsWith("Draft", belief.Status);
     }
 
     [Fact]
