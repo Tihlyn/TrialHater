@@ -85,6 +85,25 @@ public class BeliefTests
     }
 
     [Fact]
+    public void AnUnknownOpponentGetsLegalSampledHands()
+    {
+        var red = new[] { HandSlot.Of(C("AAAA")), HandSlot.Hidden, HandSlot.Hidden, HandSlot.Empty, HandSlot.Hidden };
+        var view = new MatchView(RuleSet.Of(TriadRule.Draft), EmptyBoard(), BlueHand(), red, Side.Blue);
+        var belief = HandBelief.Build(view, null, Catalog);
+        Assert.InRange(belief.Hypotheses.Count, 1, HandBelief.UnknownOpponentSamples);
+        Assert.Equal(1.0, belief.Hypotheses.Sum(h => h.Weight), 9);
+        foreach (var h in belief.Hypotheses)
+        {
+            Assert.Equal(C("AAAA"), h.RedHand[0]);
+            Assert.Null(h.RedHand[3]);
+            Assert.All(new[] { 1, 2, 4 }, i => Assert.NotNull(h.RedHand[i]));
+        }
+
+        // Same view, same samples: decisions do not flicker between frames.
+        Assert.Equal(belief.Hypotheses.Select(h => h.Description), HandBelief.Build(view, null, Catalog).Hypotheses.Select(h => h.Description));
+    }
+
+    [Fact]
     public void EveryNpcInTheSheetHasAtMostTenHands()
     {
         // Special sheet rows (no NPC name, Random rule) deal from the whole pool and are excluded.

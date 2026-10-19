@@ -33,6 +33,14 @@ public sealed class GameData
     public NpcDeck? NpcForBase(uint baseId)
         => this.NpcBaseToTriad.TryGetValue(baseId, out var triad) ? this.Npcs.Get(triad) : null;
 
+    // The deck of the only NPC with this name, as the board shows it (AtkValues[4]); null when no
+    // NPC or several share the name.
+    public NpcDeck? NpcByName(string name)
+    {
+        var matches = this.Npcs.All.Where(n => n.Name.Equals(name, StringComparison.OrdinalIgnoreCase)).Take(2).ToList();
+        return matches.Count == 1 ? matches[0] : null;
+    }
+
     // Exact rule-name match, plus "Roulette (Same)" style text once Roulette has resolved.
     public IEnumerable<TriadRule> ParseRuleText(string text)
     {

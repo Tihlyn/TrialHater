@@ -21,6 +21,9 @@ public sealed record BeliefResult(IReadOnlyList<Hypothesis> Hypotheses, string S
 // same stats are interchangeable for play.
 public static class HandBelief
 {
+    // Hands sampled for an opponent without deck data (tournament players, unknown NPCs).
+    public const int UnknownOpponentSamples = 8;
+
     public static BeliefResult Build(MatchView view, NpcDeck? npc, CardCatalog catalog)
     {
         var redHand = view.Red.Select(s => s.State == SlotState.Visible ? s.Card : (CardStats?)null).ToArray();
@@ -28,7 +31,7 @@ public static class HandBelief
         if (hiddenSlots.Count == 0)
             return new BeliefResult([new Hypothesis(redHand, 1, "all red cards visible")], "red hand fully visible");
         if (npc is null)
-            return new BeliefResult([], $"{hiddenSlots.Count} hidden red card(s) and no NPC deck data");
+            return SampleUnknown(view, redHand, hiddenSlots, catalog);
 
         var fixedCards = Stats(npc.Fixed, catalog, out var missingFixed);
         var variable = Stats(npc.Variable, catalog, out var missingVariable);
@@ -76,6 +79,55 @@ public static class HandBelief
             .Select(c => (IReadOnlyList<CardStats>)[.. hiddenForeign, .. c])
             .ToList();
         return Assemble(redHand, hiddenSlots, loose, $"{npc.Name}: any {hiddenSlots.Count} unseen pool card(s) (round {view.Round})");
+    }
+
+    // No deck data: sample complete hands from the whole catalogue instead of enumerating. Each sample
+    // keeps the cards already shown and respects the deck rarity limits (at most one 5-star, at most
+    // two of 4+ stars, counting the opponent's seen cards). The seed comes from the view, so the
+    // same position always gets the same samples. Weaker than an NPC's exact enumeration (the
+    // decision is an average over a few plausible hands), and the status says so.
+    private static BeliefResult SampleUnknown(MatchView view, CardStats?[] redHand, List<int> hiddenSlots, CardCatalog catalog)
+    {
+        var cards = catalog.All.OrderBy(c => c.Id).ToList();
+        if (cards.Count == 0)
+            return new BeliefResult([], $"{hiddenSlots.Count} hidden red card(s), no NPC deck data and no card list");
+
+        var seen = view.Red.Where(s => s.State == SlotState.Visible).Select(s => s.Card).Concat(view.RedPlayed).ToList();
+        var seenStars = seen.Select(s => catalog.WithStats(s).Select(c => c.Stars).DefaultIfEmpty((byte)1).Max()).ToList();
+        var fives = seenStars.Count(s => s >= 5);
+        var fours = seenStars.Count(s => s >= 4);
+        var rng = new Random(StableHash(view.Fingerprint()));
+        var unknowns = new List<IReadOnlyList<CardStats>>();
+        for (var attempt = 0; attempt < UnknownOpponentSamples * 50 && unknowns.Count < UnknownOpponentSamples; attempt++)
+        {
+            var pick = new List<CardInfo>(hiddenSlots.Count);
+            while (pick.Count < hiddenSlots.Count)
+            {
+                var card = cards[rng.Next(cards.Count)];
+                if (!pick.Contains(card))
+                    pick.Add(card);
+            }
+
+            var f5 = fives + pick.Count(c => c.Stars >= 5);
+            var f4 = fours + pick.Count(c => c.Stars >= 4);
+            if (f5 <= 1 && f4 <= 2)
+                unknowns.Add(pick.Select(c => c.Stats).ToList());
+        }
+
+        if (unknowns.Count == 0)
+            return new BeliefResult([], "unknown opponent: no legal hand could be sampled");
+        return Assemble(redHand, hiddenSlots, unknowns, $"unknown opponent (no deck data): {unknowns.Count} sampled hand(s), lower confidence");
+    }
+
+    private static int StableHash(string text)
+    {
+        unchecked
+        {
+            var hash = (int)2166136261;
+            foreach (var ch in text)
+                hash = (hash ^ ch) * 16777619;
+            return hash;
+        }
     }
 
     // The exact fixed/variable enumeration, or null when what was seen contradicts it.

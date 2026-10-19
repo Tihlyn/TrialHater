@@ -154,8 +154,10 @@ public sealed unsafe class Plugin : IDalamudPlugin
         var board = this.Addon(BoardReader.AddonName);
         var frame = board == null ? null : BoardReader.Read(board, this.frameCounter);
         var resultVisible = this.IsVisible(ResultAddon);
-        this.IdentifyNpc(data);
+        if (!this.Tracker.InMatch)
+            this.IdentifyNpc(data);
         this.Tracker.Update(frame, resultVisible, data, () => this.SavedDecks(data.Cards));
+        this.CheckOpponent(data, frame);
 
         if (this.Tracker.View is { ToMove: Core.Engine.Side.Blue } view)
             this.Analysis.Request(view, this.CurrentNpc, data.Cards, this.PolicyOptions);
@@ -190,6 +192,25 @@ public sealed unsafe class Plugin : IDalamudPlugin
         this.SetAutoPlay(true);
         this.Session.Start(triad, npc.Name, this.Configuration.SessionMaxMatches);
         return null;
+    }
+
+    // The board names its opponent (AtkValues[4]). If that is not the NPC we identified from the
+    // target - a tournament player, or a stale target from an earlier NPC - look the name up, and
+    // fall back to "unknown opponent" rather than reasoning from the wrong deck.
+    private void CheckOpponent(GameData data, BoardFrame? frame)
+    {
+        if (!this.Tracker.InMatch || frame?.OpponentName is not { Length: > 0 } name)
+            return;
+        if (this.CurrentNpc is { } npc && npc.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
+            return;
+        var byName = data.NpcByName(name);
+        var triad = byName?.TriadId ?? 0;
+        if (triad == this.Tracker.NpcTriadId)
+            return;
+        this.Tracker.NpcTriadId = triad;
+        this.Log.Information(byName is null
+            ? $"[Npc] opponent '{name}' has no deck data; hidden cards will be sampled"
+            : $"[Npc] opponent '{name}' identified by name (TripleTriad {triad})");
     }
 
     // The challenge window opens while the NPC is targeted; that target's base id names the
