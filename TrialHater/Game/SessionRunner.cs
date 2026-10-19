@@ -23,7 +23,11 @@ public sealed unsafe class SessionRunner
     private const uint RequestChallengeNode = 41;
     private const uint RequestQuitNode = 42;
     private const uint DeckConfirmNode = 3;
-    private const int TriadMenuIcon = 71101;
+    // The "Triple Triad Challenge" entry's icon varies by NPC: 71101 at Malevolent Weasel, 71102 at
+    // the hall overseer (2026-10-19). Probably the same marker in different states; the
+    // neighbouring ids are accepted too, and a miss leaves the menu to the player with a status.
+    private const int TriadMenuIconFirst = 71101;
+    private const int TriadMenuIconLast = 71104;
     private const float InteractRange = 4f;
 
     private static readonly TimeSpan RetryAfter = TimeSpan.FromSeconds(4);
@@ -97,7 +101,7 @@ public sealed unsafe class SessionRunner
             return;
         this.Active = false;
         this.Status = $"stopped: {why}";
-        this.log($"[Session] {this.Status} after {this.MatchesDone} match(es): {this.Wins}W {this.Draws}D {this.Losses}L");
+        this.log($"[Session] {this.Status}; {this.MatchesDone} played: {this.Wins}W {this.Draws}D {this.Losses}L");
     }
 
     public void MatchEnded(int blueCards)
@@ -226,6 +230,8 @@ public sealed unsafe class SessionRunner
         {
             BoardOpen = board != null,
             ResultOpen = resultActionable,
+            MatchWindowVisible = this.Visible("TripleTriad") || this.Visible("TripleTriadResult")
+                                 || this.Visible("TripleTriadRequest") || this.Visible("TripleTriadSelDeck"),
             ResultKey = $"{this.Run("TripleTriadResult", result != null)}:{StringValue(result, 3)}",
             DeckSelectOpen = deck != null && Actionable(deck, DeckConfirmNode),
             RequestOpen = request != null && Actionable(request, RequestChallengeNode),
@@ -259,6 +265,12 @@ public sealed unsafe class SessionRunner
         return ptr.IsNull ? null : (AtkUnitBase*)ptr.Address;
     }
 
+    private bool Visible(string name)
+    {
+        var addon = this.Addon(name);
+        return addon != null && addon->IsVisible;
+    }
+
     private AtkUnitBase* Ready(string name)
     {
         var addon = this.Addon(name);
@@ -277,7 +289,7 @@ public sealed unsafe class SessionRunner
         var count = IntValue(menu, 5);
         for (var i = 0; i < count && i < 16; i++)
         {
-            if (IntValue(menu, 6 + (3 * i)) == TriadMenuIcon)
+            if (IntValue(menu, 6 + (3 * i)) is >= TriadMenuIconFirst and <= TriadMenuIconLast)
                 return i;
         }
 

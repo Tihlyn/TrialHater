@@ -31,6 +31,17 @@ public class SessionPlannerTests
         Assert.Equal(SessionActionKind.Quit, Next(new SessionSnapshot { ResultOpen = true }, done: 0, new SessionGoal(0, StopRequested: true)));
     }
 
+    // 2026-10-19: the last result window opened before its buttons were live and the session
+    // ended on the spot, leaving the window to the player.
+    [Fact]
+    public void DoesNotEndWhileTheResultWindowIsStillAppearing()
+    {
+        var appearing = new SessionSnapshot { MatchWindowVisible = true };
+        Assert.Equal(SessionActionKind.Wait, Next(appearing, done: 3));
+        Assert.Equal(SessionActionKind.Quit, Next(appearing with { ResultOpen = true }, done: 3));
+        Assert.Equal(SessionActionKind.Done, Next(new SessionSnapshot(), done: 3));
+    }
+
     [Fact]
     public void UnlimitedGoalKeepsGoing()
         => Assert.Equal(SessionActionKind.Rematch, Next(new SessionSnapshot { ResultOpen = true }, done: 500, new SessionGoal(0, false)));

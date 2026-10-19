@@ -9,6 +9,10 @@ public sealed record SessionSnapshot
 
     public bool ResultOpen { get; init; }
 
+    // A match window is on screen at all, actionable or not (the result window appears before its
+    // buttons go live). A session never ends while one is up: it quits through it.
+    public bool MatchWindowVisible { get; init; }
+
     public string ResultKey { get; init; } = string.Empty;
 
     public bool DeckSelectOpen { get; init; }
@@ -104,6 +108,8 @@ public static class SessionPlanner
                 : new SessionAction(SessionActionKind.ChooseMenu, "SelectIconString", s.MenuKey, "Triple Triad Challenge", s.MenuTriadIndex);
         }
 
+        if (s.MatchWindowVisible)
+            return SessionAction.Wait("waiting for the match window to take input");
         if (stopping)
             return new SessionAction(SessionActionKind.Done, string.Empty, string.Empty, goal.StopRequested ? "stopped" : $"{matchesDone} match(es) played");
         if (s.PlayerOccupied)

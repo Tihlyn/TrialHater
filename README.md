@@ -44,6 +44,6 @@ Target the NPC before challenging it. The target identifies the NPC's deck, and 
 | Board reader, tracker, adviser window | Working in game (Ascension, Sudden Death, Three/All Open, Plus, Same, Chaos) |
 | Auto play of our moves | Working in game. 2026-10-19: 7 consecutive matches fully auto-played, 33 placements, all accepted, 6 wins / 1 loss (Chaos luck; every move optimal in hindsight) |
 | Journals | `matches.csv` (results), `npc_moves.jsonl` (NPC moves for the opponent model) |
-| Farming session (talk, challenge, deck, play, rematch, quit) | Built (`SessionRunner`, pure decision logic in `Core/Session` with tests); first live run pending |
+| Farming session (talk, challenge, deck, play, rematch, quit) | Working in game. 2026-10-19: 10-match session vs hall overseer (Chaos + Fallen Ace), 6W 4D 0L, every window action sent once. Two fixes from that run: the NPC-menu icon varies by NPC (71101/71102), and the session now quits through the last result window instead of ending before its buttons go live |
 | Card registration, deck choice, travel between NPCs | Not built |
 | Not yet seen in game | Order, Reverse, Descension, Swap, Random, Roulette |

@@ -47,7 +47,7 @@ The player's drag-drop reaches agent 174 as `ReceiveEvent [Int 14, UInt slot << 
 
 | Window | Control | Event | Callback the game sends |
 |---|---|---|---|
-| `SelectIconString` (NPC menu) | entry whose icon (AtkValues `6 + 3k`) is **71101** | — | `[k]`, close = true |
+| `SelectIconString` (NPC menu) | entry whose icon (AtkValues `6 + 3k`) is **71101** (Malevolent Weasel) or **71102** (hall overseer) | — | `[k]`, close = true |
 | `Talk` | collision node | `MouseClick` | none; `[0]` is the line, `[1]` the speaker (sometimes empty) |
 | `TripleTriadRequest` | node 41 Challenge / node 42 Quit | `ButtonClick` 1 / 2 | `[0]` / `[1]` |
 | `TripleTriadSelDeck` | node 3 confirm; list node 2 selects a row | `ButtonClick` 2 / `ListItemClick` 1 | `[5]` |
