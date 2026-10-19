@@ -48,6 +48,11 @@ public sealed record MatchView(
     // NPC deck cards now in our hand (Swap): seen, and no longer in Red's hand.
     public IReadOnlyList<CardStats> RedLost { get; init; } = [];
 
+    // Draft: the star rating of each of our hand slots as dealt (null if not read). In a Draft
+    // tournament every deck is one card per rarity in the same slot order, so this is also the
+    // opponent's.
+    public IReadOnlyList<byte>? SlotStars { get; init; }
+
     public int HiddenRedCount => this.Red.Count(s => s.State == SlotState.Hidden);
 
     public bool RedFullyKnown => this.HiddenRedCount == 0;

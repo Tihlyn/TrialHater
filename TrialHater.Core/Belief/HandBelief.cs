@@ -24,13 +24,8 @@ public static class HandBelief
     // Hands sampled for an opponent without deck data (tournament players, unknown NPCs).
     public const int UnknownOpponentSamples = 8;
 
-    // Hands sampled under Draft, where every hidden slot's rarity is known.
+    // Hands sampled under Draft, where every hidden card's rarity is known.
     public const int DraftSamples = 16;
-
-    // A drafted deck is one card of each rarity, dealt in the draft window's order: hand slot i
-    // holds a card of DraftStars[i] stars (all 8 decks of the 2026-10-19 tournament, and every
-    // card revealed from a hand slot during its matches).
-    public static readonly byte[] DraftStars = [3, 5, 2, 4, 1];
 
     public static BeliefResult Build(MatchView view, NpcDeck? npc, CardCatalog catalog)
     {
@@ -130,29 +125,58 @@ public static class HandBelief
         return Assemble(redHand, hiddenSlots, unknowns, $"unknown opponent (no deck data): {unknowns.Count} sampled hand(s), lower confidence");
     }
 
-    // Draft: each hidden slot gets a random card of its slot's rarity. Cards are not excluded for
-    // being seen elsewhere (two drafted decks can share a card). Swap moves a card between slots and
-    // Sudden Death redeals from the board, so both break the slot order: sample as unknown then.
+    // Draft: every deck is one card of each rarity (1-5 stars), and within a tournament all decks
+    // share one slot order, which differs between tournaments (3-5-2-4-1, then 2-1-4-3-5 on
+    // 2026-10-19). With our slot order read (view.SlotStars), each hidden slot gets a random card of
+    // its rarity; without it, the hidden cards take the rarities not yet seen, in any slot. Cards are
+    // not excluded for being seen elsewhere (two drafted decks can share a card). Swap and Sudden
+    // Death (redealt from the board) break the one-per-rarity hand: sample as unknown then.
     private static BeliefResult SampleDraft(MatchView view, CardStats?[] redHand, List<int> hiddenSlots, CardCatalog catalog)
     {
-        if (view.Round > 0 || view.Rules.Has(TriadRule.Swap) || view.Red.Length != DraftStars.Length)
+        if (view.Round > 0 || view.Rules.Has(TriadRule.Swap) || view.Red.Length != 5)
             return SampleUnknown(view, redHand, hiddenSlots, catalog);
+
+        byte[] stars;
+        string how;
+        if (view.SlotStars is { Count: 5 } order && order.Order().SequenceEqual(new byte[] { 1, 2, 3, 4, 5 }))
+        {
+            stars = hiddenSlots.Select(i => order[i]).ToArray();
+            how = $"slot order {string.Join("-", order)} stars";
+        }
+        else
+        {
+            var missing = new List<byte> { 1, 2, 3, 4, 5 };
+            var seen = view.Red.Where(s => s.State == SlotState.Visible).Select(s => s.Card).Concat(view.RedPlayed);
+            foreach (var card in seen)
+            {
+                var star = catalog.WithStats(card).Select(c => c.Stars).FirstOrDefault(missing.Contains);
+                if (star == 0)
+                    return SampleUnknown(view, redHand, hiddenSlots, catalog);
+                missing.Remove(star);
+            }
+
+            if (missing.Count != hiddenSlots.Count)
+                return SampleUnknown(view, redHand, hiddenSlots, catalog);
+            stars = [.. missing];
+            how = "slot order unknown";
+        }
+
         var byStars = catalog.All.OrderBy(c => c.Id).GroupBy(c => c.Stars).ToDictionary(g => g.Key, g => g.ToList());
-        if (hiddenSlots.Any(i => !byStars.ContainsKey(DraftStars[i])))
+        if (stars.Any(s => !byStars.ContainsKey(s)))
             return new BeliefResult([], "Draft: the card list has no card of a hidden slot's rarity");
 
         var rng = new Random(StableHash(view.Fingerprint()));
         var unknowns = new List<IReadOnlyList<CardStats>>();
         for (var n = 0; n < DraftSamples; n++)
         {
-            unknowns.Add(hiddenSlots.Select(i =>
+            unknowns.Add(stars.Select(s =>
             {
-                var tier = byStars[DraftStars[i]];
+                var tier = byStars[s];
                 return tier[rng.Next(tier.Count)].Stats;
             }).ToList());
         }
 
-        return Assemble(redHand, hiddenSlots, unknowns, "Draft (one card per rarity, slot order 3-5-2-4-1 stars): sampled, lower confidence", keepOrder: true);
+        return Assemble(redHand, hiddenSlots, unknowns, $"Draft (one card per rarity, {how}): sampled, lower confidence", keepOrder: true);
     }
 
     private static int StableHash(string text)

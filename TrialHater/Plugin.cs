@@ -23,6 +23,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
     private readonly ICommandManager commandManager;
     private readonly IFramework framework;
     private readonly ITargetManager targets;
+    private readonly IObjectTable objects;
     private readonly ModelProbe probe;
     private readonly MatchJournal journal;
     private long frameCounter;
@@ -44,6 +45,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
         this.commandManager = commandManager;
         this.framework = framework;
         this.targets = targets;
+        this.objects = objects;
         this.Log = log;
 
         this.Configuration = Configuration.Load(pluginInterface);
@@ -152,7 +154,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
             return;
 
         var board = this.Addon(BoardReader.AddonName);
-        var frame = board == null ? null : BoardReader.Read(board, this.frameCounter);
+        var frame = board == null ? null : BoardReader.Read(board, this.frameCounter, this.objects.LocalPlayer?.Name.TextValue);
         var resultVisible = this.IsVisible(ResultAddon);
         if (!this.Tracker.InMatch)
             this.IdentifyNpc(data);

@@ -14,13 +14,18 @@ internal static unsafe class BoardReader
     // AtkValues[23] and two arguments in [24] and [25], acknowledged by callback [12]
     // (docs/MODEL_MAPPING.md, 2026-10-19 capture). Command 1 = the player may act.
     private const int CommandIndex = 23;
-    private const int NpcNameIndex = 4;
+    private const int BlueNameIndex = 1;
+    private const int RedNameIndex = 4;
     private const int FirstRuleIndex = 5;
     private const int LastRuleIndex = 9;
     private const int LeadingValueCount = 48;
     private const int MaxTextNodes = 600;
 
-    public static BoardFrame? Read(AtkUnitBase* unit, long frame)
+    // `localName`: our character's name. The board names its blue player in [1] and its red player
+    // in [4]; against NPCs we are always blue, but a tournament against a player can seat us red
+    // (2026-10-19). Then the frame is mirrored so that Blue is always us: hands swapped, owners
+    // 1 <-> 2. Our hand keeps its slot numbers (the placement callback used the red slot index).
+    public static BoardFrame? Read(AtkUnitBase* unit, long frame, string? localName)
     {
         if (unit == null || unit->RootNode == null)
             return null;
@@ -55,13 +60,27 @@ internal static unsafe class BoardReader
         texts.AddRange(VisibleTexts(unit));
 
         int? Value(int i) => i < values.Length ? values[i] : null;
+        string? Name(int i) => i < strings.Length ? strings[i] : null;
+        var seatedRed = localName is { Length: > 0 }
+            && string.Equals(Name(RedNameIndex), localName, StringComparison.Ordinal)
+            && !string.Equals(Name(BlueNameIndex), localName, StringComparison.Ordinal);
+        if (seatedRed)
+        {
+            (blue, red) = (Mirror(red), Mirror(blue));
+            cells = Mirror(cells);
+        }
+
         return new BoardFrame(frame, unit->IsVisible, unit->IsReady, (byte)board->TurnState,
             Value(CommandIndex), Value(CommandIndex + 1), Value(CommandIndex + 2),
             blue, red, cells, texts, values)
         {
-            OpponentName = NpcNameIndex < strings.Length ? strings[NpcNameIndex] : null,
+            OpponentName = Name(seatedRed ? BlueNameIndex : RedNameIndex),
+            SeatedRed = seatedRed,
         };
     }
+
+    private static SlotRaw[] Mirror(SlotRaw[] slots)
+        => slots.Select(s => s with { Owner = s.Owner switch { 1 => 2, 2 => 1, var o => o } }).ToArray();
 
     private static string SafeString(ref AtkValue v)
     {

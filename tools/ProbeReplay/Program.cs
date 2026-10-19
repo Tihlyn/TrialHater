@@ -31,15 +31,24 @@ foreach (var lines in matches.Where(m => m.Any(r => placement.IsMatch(r.GetPrope
         .Where(r => r != "(none)").Select(Enum.Parse<TriadRule>));
     var events = lines.Select((r, i) => (Line: i, M: placement.Match(r.GetProperty("trigger").GetString()!))).Where(x => x.M.Success).ToList();
     var first = lines[events[0].Line];
-    var blue = first.GetProperty("blue").EnumerateArray().Select(s => Parse(s.GetString()!, swapped)).ToArray();
 
-    // Red's hand in play order (its slot order is not recoverable from the probe; play order works).
-    var redCards = events.Where(e => e.M.Groups[1].Value == "red").Select(e => Parse(lines[e.Line + 1].GetProperty("board")[int.Parse(e.M.Groups[3].Value)].GetString()!, swapped)!.Value).ToList();
-    while (redCards.Count < 5)
-        redCards.Add(new CardStats(1, 1, 1, 1));
+    // Both hands in play order, read from the board after each placement: slot order is not
+    // needed to check captures, and a hand we could not see (the board's blue player when we sat
+    // red, recorded before the reader mirrored it) still replays.
+    List<CardStats> PlayOrder(string who)
+    {
+        var cards = events.Where(e => e.M.Groups[1].Value == who && e.Line + 1 < lines.Count)
+            .Select(e => Parse(lines[e.Line + 1].GetProperty("board")[int.Parse(e.M.Groups[3].Value)].GetString()!, swapped)!.Value).ToList();
+        while (cards.Count < 5)
+            cards.Add(new CardStats(1, 1, 1, 1));
+        return cards;
+    }
+
+    var blueCards = PlayOrder("we");
+    var redCards = PlayOrder("red");
     var blueFirst = events[0].M.Groups[1].Value == "we";
-    var engine = new Engine(new Position(rules, new BoardCard?[9], blue, redCards.Select(c => (CardStats?)c).ToArray(), blueFirst ? Side.Blue : Side.Red));
-    var usedBlue = new bool[5];
+    var engine = new Engine(new Position(rules, new BoardCard?[9], blueCards.Select(c => (CardStats?)c).ToArray(), redCards.Select(c => (CardStats?)c).ToArray(), blueFirst ? Side.Blue : Side.Red));
+    var blueNext = 0;
     var redNext = 0;
     var label = $"{first.GetProperty("time").GetDateTime():HH:mm} npc {first.GetProperty("npc").GetUInt32()} [{rules}]";
     var ok = true;
@@ -48,17 +57,7 @@ foreach (var lines in matches.Where(m => m.Any(r => placement.IsMatch(r.GetPrope
         if (line + 1 >= lines.Count)
             break;
         var cell = int.Parse(m.Groups[3].Value);
-        int slot;
-        if (m.Groups[1].Value == "we")
-        {
-            var played = Parse(lines[line + 1].GetProperty("board")[cell].GetString()!, swapped);
-            slot = Enumerable.Range(0, 5).First(s => !usedBlue[s] && blue[s] == played);
-            usedBlue[slot] = true;
-        }
-        else
-        {
-            slot = redNext++;
-        }
+        var slot = m.Groups[1].Value == "we" ? blueNext++ : redNext++;
 
         if ((m.Groups[1].Value == "we") != engine.BlueToMove)
         {

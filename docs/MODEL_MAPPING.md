@@ -153,3 +153,11 @@ A tournament match has **no `TripleTriadResult`**: the board closes on the final
 ### Why match 1 stalled
 
 The plugin identified Prideful Stag from the target (TripleTriad 2293864, a tournament row with its own sheet deck) and built the hand belief from that deck. Draft replaces the deck: the first card the NPC played (5563, Beastman) was not in the sheet pool, the belief became unusable, and auto play waited with "no playable decision" (not logged then; refusals are now logged once per reason). Draft now ignores NPC decks. Name lookup also cannot resolve tournament NPCs: names like "Wyra "Greenhands" Lyehga" exist twice in the sheet (world NPC + tournament row), so `NpcByName` returns nothing and the opponent is sampled.
+
+## Session 7: 2026-10-19 23:25 UTC, Open Tournament (Draft) with another player (Fox Dragus)
+
+Result: 5th of 8 (3 points). Round 1 vs Fox Dragus: draw 5-5 (auto). Round 2 vs Flichoirel: won 6-4 (auto). Round 3 vs Fox Dragus again: lost 4-6, played by hand after the plugin stalled. ProbeReplay: 0 mismatches.
+
+**Seats.** The board names its blue player in AtkValues `[1]` (title in `[2]`) and its red player in `[4]` (title `[5]`). Against NPCs we are always blue. In round 3 the other player was blue and we were red. Our cards sat in the red hand slots, with owner 2 on the board. The game still announced our turn with command 1. Our placements were sent as `[14, slot << 16 | cell]` with the **red slot index** of our card and the absolute cell, the same encoding as when blue. The plugin had read the other player's face-down hand as ours ("no legal move"). `BoardReader` now mirrors the frame when `[4]` is our character's name: hands swapped, owners 1 <-> 2, opponent name from `[1]`.
+
+**Draft slot order is per tournament.** All 8 decks again had one card per rarity, all in the same slot order, but this time it was 2-1-4-3-5 stars. The first tournament used 3-5-2-4-1. The order also matched our own hand, so `MatchTracker` reads our hand's rarities at the deal (`SlotStars`) and `HandBelief` gives each hidden red slot that rarity. Without the order it falls back to "the rarities not yet seen". The draft window's "recommended" picks were used, and the draft callbacks were `[1]`, `[2]`, then `[-2]` as before.

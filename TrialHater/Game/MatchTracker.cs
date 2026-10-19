@@ -16,6 +16,7 @@ public sealed class MatchTracker
     private bool swapResolved;
     private List<CardStats> redForeign = new();
     private List<CardStats> redLost = new();
+    private byte[]? slotStars;
 
     public int MatchGeneration { get; private set; }
 
@@ -68,6 +69,7 @@ public sealed class MatchTracker
         this.swapResolved = false;
         this.redForeign = new();
         this.redLost = new();
+        this.slotStars = null;
     }
 
     // True once the result window has been seen for the current match.
@@ -115,6 +117,14 @@ public sealed class MatchTracker
         if (!this.swapResolved && this.rules.Has(TriadRule.Swap) && frame.OnBoard == 0 && frame.BlueInHand == 5)
             this.ResolveSwap(frame, savedDecks());
 
+        // Draft: our hand's star order as dealt, before any card leaves it (see HandBelief).
+        if (this.slotStars is null && this.Round == 0 && frame.Blue.All(s => s.HasCard && !s.Hidden))
+        {
+            this.slotStars = frame.Blue.Select(s => s.Rarity).ToArray();
+            if (this.rules.Has(TriadRule.Draft))
+                this.Note($"our slot stars: {string.Join("-", this.slotStars)}");
+        }
+
         this.previous = frame;
         this.View = this.BuildView(frame);
     }
@@ -139,6 +149,8 @@ public sealed class MatchTracker
         this.TurnGeneration++;
         this.notes.Clear();
         this.Note($"match #{this.MatchGeneration} started (npc {npc})");
+        if (frame.SeatedRed)
+            this.Note("we sit on the board's red side: hands and owners mirrored");
     }
 
     private void ParseRules(BoardFrame frame, GameData data)
@@ -264,6 +276,7 @@ public sealed class MatchTracker
             RedPlayed = [.. this.redPlayed],
             RedForeign = this.redForeign,
             RedLost = this.redLost,
+            SlotStars = this.slotStars,
         };
     }
 

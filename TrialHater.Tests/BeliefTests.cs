@@ -108,7 +108,8 @@ public class BeliefTests
     {
         // Slot 1 (5 stars) already played, slot 2 (2 stars) shown.
         var red = new[] { HandSlot.Hidden, HandSlot.Empty, HandSlot.Of(C("5563/Beastman")), HandSlot.Hidden, HandSlot.Hidden };
-        var view = new MatchView(RuleSet.Of(TriadRule.Draft), EmptyBoard(), BlueHand(), red, Side.Blue);
+        byte[] order = [3, 5, 2, 4, 1];
+        var view = new MatchView(RuleSet.Of(TriadRule.Draft), EmptyBoard(), BlueHand(), red, Side.Blue) { SlotStars = order };
         var belief = HandBelief.Build(view, null, Catalog);
         Assert.InRange(belief.Hypotheses.Count, 2, HandBelief.DraftSamples);
         Assert.Equal(1.0, belief.Hypotheses.Sum(h => h.Weight), 9);
@@ -117,7 +118,24 @@ public class BeliefTests
             Assert.Null(h.RedHand[1]);
             Assert.Equal(C("5563/Beastman"), h.RedHand[2]);
             foreach (var slot in new[] { 0, 3, 4 })
-                Assert.Contains(HandBelief.DraftStars[slot], Catalog.WithStats(h.RedHand[slot]!.Value).Select(c => c.Stars));
+                Assert.Contains(order[slot], Catalog.WithStats(h.RedHand[slot]!.Value).Select(c => c.Stars));
+        }
+    }
+
+    [Fact]
+    public void DraftWithoutTheSlotOrderUsesTheMissingRarities()
+    {
+        // 1599 (4 stars) shown and 5522 (1 star) played: the three hidden cards are 2, 3 and 5 stars.
+        var red = new[] { HandSlot.Hidden, HandSlot.Empty, HandSlot.Of(C("1599")), HandSlot.Hidden, HandSlot.Hidden };
+        var view = new MatchView(RuleSet.Of(TriadRule.Draft), EmptyBoard(), BlueHand(), red, Side.Blue) { RedPlayed = [C("5522")] };
+        var belief = HandBelief.Build(view, null, Catalog);
+        Assert.True(belief.Usable, belief.Status);
+        Assert.Contains("slot order unknown", belief.Status);
+        foreach (var h in belief.Hypotheses)
+        {
+            var hidden = new[] { 0, 3, 4 }.Select(i => Catalog.WithStats(h.RedHand[i]!.Value).Select(c => c.Stars).ToList()).ToList();
+            foreach (var star in new byte[] { 2, 3, 5 })
+                Assert.Contains(hidden, stars => stars.Contains(star));
         }
     }
 

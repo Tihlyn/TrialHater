@@ -52,8 +52,12 @@ public sealed record BoardFrame(
     public const int CommandPlayerActs = 1;
     public const int CommandPlayerActsForced = 6;
 
-    // AtkValues[4]: the opponent's name as the board shows it.
+    // The opponent's name as the board shows it (AtkValues[4], or [1] when we sit red).
     public string? OpponentName { get; init; }
+
+    // We are the board's red player (a tournament against a player); the reader has already
+    // mirrored hands and owners so that Blue is us.
+    public bool SeatedRed { get; init; }
 
     public int BlueInHand => this.Blue.Count(s => s.HasCard);
 
