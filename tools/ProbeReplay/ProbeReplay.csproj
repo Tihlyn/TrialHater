@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Replays every match recorded in model_probe.jsonl through the engine and reports any placement
+       whose resulting ownership differs from what the board showed. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\TrialHater.Core\TrialHater.Core.csproj" />
+  </ItemGroup>
+</Project>

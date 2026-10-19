@@ -1,0 +1,44 @@
+const { chromium } = require('../.tools/node_modules/playwright');
+const { pathToFileURL } = require('node:url');
+const path = require('node:path');
+const fs = require('node:fs');
+
+(async () => {
+  const root = path.resolve(__dirname, '..');
+  const browser = await chromium.launch({channel: 'msedge', headless: true});
+  const page = await browser.newPage({viewport: {width: 1440, height: 1000}});
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.goto(pathToFileURL(path.join(root, 'CARD_CATALOGUE.html')).href);
+  const count = () => page.locator('#rows tr').count();
+  if (await count() !== 475) throw new Error('Wrong initial card count');
+  await page.locator('#search').fill('Tiisol Ja');
+  if (await count() !== 1) throw new Error('Card search failed');
+  await page.locator('#reset').click();
+  await page.locator('#stars').selectOption('5');
+  if (await count() !== 69) throw new Error('Rarity filter failed');
+  await page.locator('#reset').click();
+  await page.locator('#type').selectOption('Primal');
+  if (await count() !== 30) throw new Error('Type filter failed');
+  await page.locator('#reset').click();
+  await page.locator('#npc').check();
+  const npcCount = await count();
+  if (npcCount < 1) throw new Error('NPC filter empty');
+  await page.locator('#reset').click();
+  await page.screenshot({path: path.join(__dirname, 'catalogue-desktop.png')});
+  await page.goto(pathToFileURL(path.join(root, 'REPORT.html')).href);
+  if (await page.locator('h2').count() < 10) throw new Error('Report sections missing');
+  await page.screenshot({path: path.join(__dirname, 'report-desktop.png')});
+  await page.setViewportSize({width: 390, height: 844});
+  await page.screenshot({path: path.join(__dirname, 'report-mobile.png')});
+  const reportOverflows = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth);
+  await page.goto(pathToFileURL(path.join(root, 'CARD_CATALOGUE.html')).href);
+  const catalogueOverflows = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth);
+  await page.screenshot({path: path.join(__dirname, 'catalogue-mobile.png')});
+  if (errors.length) throw new Error(errors.join('\n'));
+  const result = {initialCards:475, search:true, rarityFilter:true, typeFilter:true, npcFilterCount:npcCount,
+                  reset:true, pageErrors:errors, reportOverflows, catalogueOverflows};
+  fs.writeFileSync(path.join(__dirname, 'browser-checks.json'), JSON.stringify(result,null,2)+'\n');
+  console.log(JSON.stringify(result));
+  await browser.close();
+})().catch(e => {console.error(e);process.exit(1)});

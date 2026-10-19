@@ -1,0 +1,11 @@
+{
+  "initialCards": 475,
+  "search": true,
+  "rarityFilter": true,
+  "typeFilter": true,
+  "npcFilterCount": 244,
+  "reset": true,
+  "pageErrors": [],
+  "reportOverflows": false,
+  "catalogueOverflows": false
+}

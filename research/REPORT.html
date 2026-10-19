@@ -1,0 +1,621 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Triple Triad · Research &amp; automation design</title><style>
+:root{color-scheme:light;--ink:#152c36;--muted:#53656e;--accent:#126c71;--line:#dce5e5}
+*{box-sizing:border-box}body{margin:0;background:#f4f6f4;color:var(--ink);font:16px/1.65 system-ui,Segoe UI,sans-serif}
+header{background:#173a42;color:white;padding:40px max(24px,calc((100vw - 1180px)/2));border-bottom:5px solid #c8a85e}
+header h1{margin:0 0 8px;font-size:32px}header p{margin:0;color:#d4e2e4}header a{color:#d6eeee}
+main{max-width:1180px;margin:30px auto;padding:36px;background:white;border:1px solid var(--line);border-radius:12px}
+h1,h2,h3{line-height:1.25;scroll-margin-top:20px}h2{margin-top:48px;padding-top:20px;border-top:1px solid var(--line)}h3{margin-top:30px}
+a{color:var(--accent);text-underline-offset:3px;overflow-wrap:anywhere}table{border-collapse:collapse;width:100%;font-size:14px;margin:24px 0}
+th{text-align:left;background:#e8efed}th,td{padding:11px 12px;border:1px solid var(--line);vertical-align:top}
+tr:nth-child(even){background:#f8faf9}code{font-family:Consolas,monospace;font-size:.9em;overflow-wrap:anywhere}
+pre{overflow:auto;padding:20px;background:#edf2f1;border-radius:8px}p,li{max-width:100ch}li{margin:6px 0}
+.toc{padding:18px 24px;background:#f0f5f3;border-radius:8px}.toc ul{columns:2;padding-left:20px}.toc ul ul{display:none}
+.controls{display:flex;flex-wrap:wrap;gap:12px;align-items:center;position:sticky;top:0;background:white;padding:14px 0;border-bottom:1px solid var(--line)}
+input,select,button{font:inherit;padding:9px;border:1px solid #abc2c2;border-radius:6px}input[type=search]{flex:1;min-width:240px}
+.muted{color:var(--muted)}.stats{font-variant-numeric:tabular-nums;white-space:nowrap}.tablewrap{overflow-x:auto}
+.architecture{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:24px 0}.architecture div{padding:16px;border:1px solid #a9c8c6;background:#eff6f4;border-radius:8px}
+@media(max-width:700px){main{margin:0;padding:20px;border-radius:0}.toc ul{columns:1}.architecture{grid-template-columns:1fr}header h1{font-size:26px}}
+@media print{body,main{background:white}main{border:0;margin:0;padding:0;max-width:none}.controls,.toc{display:none}header{background:white;color:black;padding:0;border:0}header p{color:black}a{color:inherit}h2,h3{break-after:avoid}tr{break-inside:avoid}}
+</style></head><body><header><h1>Triple Triad · Research &amp; automation design</h1><p>Research snapshot · 19 October 2026</p></header><main><div class="toc">
+<ul>
+<li><a href="#findings-that-change-the-implementation-decision">Findings that change the implementation decision</a></li>
+<li><a href="#evidence-and-freshness">Evidence and freshness</a></li>
+<li><a href="#card-list-and-data-model">Card list and data model</a></li>
+<li><a href="#rules-and-constraints">Rules and constraints</a></li>
+<li><a href="#deck-building-and-strategy">Deck building and strategy</a></li>
+<li><a href="#public-repository-audit">Public repository audit</a></li>
+<li><a href="#reproduced-gaps-and-priorities">Reproduced gaps and priorities</a></li>
+<li><a href="#proposed-architecture">Proposed architecture</a></li>
+<li><a href="#solver-design-reliable-before-more-elaborate">Solver design: reliable before more elaborate</a></li>
+<li><a href="#validation-and-implementation-sequence">Validation and implementation sequence</a></li>
+<li><a href="#what-is-established-and-what-remains-open">What is established, and what remains open</a></li>
+<li><a href="#source-links">Source links</a></li>
+</ul>
+</div>
+<p>Research date: <strong>19 October 2026</strong>. Scope: current public card data, game rules, strategy, source-level review of public Dalamud projects, and a proposed implementation. No plugin was installed into FFXIV, and no live game session was used.</p>
+<p><strong>Recommendation:</strong> build an NPC-focused automation system around an independently testable rules engine and an explicit session controller. Evaluate AutoTripleTriadGrind first if adopting its AGPL licensing is acceptable; it already covers most of the requested end-to-end workflow. For a permissively licensed implementation, use the MIT TriadBuddy lineage and BSD-licensed Saucy as the starting points. Spend the first development effort on rule conformance, state freshness, and measured solver quality. Starting with another solver from scratch would duplicate substantial existing work.</p>
+<p>This recommendation follows source inspection, not an in-game comparison. In particular, <strong>“existing automation,” “optimal play,” and “reliable unattended operation” are three different claims</strong>. This research supports the first, identifies gaps in the second, and does not establish the third.</p>
+<p>The resource bundle includes a <a href="CARD_CATALOGUE.html">searchable card catalogue</a>, <a href="data/cards.csv">475-card CSV</a>, <a href="data/npcs.csv">NPC list</a>, <a href="data/npc-decks.csv">NPC fixed/variable deck pools</a>, <a href="data/example-decks.json">example decks</a>, <a href="data/community-decks-sample.csv">100 public deck samples</a>, raw API snapshots, pinned source checkouts, and reproducible validation outputs.</p>
+<h2 id="findings-that-change-the-implementation-decision">Findings that change the implementation decision</h2>
+<ol>
+<li><strong>A dedicated collection bot already exists.</strong> AutoTripleTriadGrind has collection planning, NPC assignment, travel, deck construction, match play, registration, and continuation. Its existence changes the first question from “how do we build everything?” to “which existing implementation meets our licensing and reliability requirements?” <a href="https://github.com/XeldarAlz/FFXIV-AutoTripleTriadGrind/blob/71da7486806c04aa00c7539cc68fad1f51d0add3/README.md">Project overview</a></li>
+<li><strong>Current Saucy is substantially self-contained.</strong> Its TripleTriad directory contains game logic and automation, rather than merely forwarding moves from an installed TriadBuddy plugin. It also has collection UI, cache management, travel integrations, and reward tracking. <a href="https://github.com/PunishXIV/Saucy/tree/53971e8b75f2f522e2f2201a1ebb55f9e9d4cc28/Saucy/TripleTriad">Saucy source tree</a></li>
+<li><strong>The inspected solvers are not proofs of optimal play.</strong> Their search mixes exploration with random rollouts; the inherited result ranking is discontinuous. Their displayed probabilities need empirical calibration. <a href="https://github.com/PunishXIV/Saucy/blob/53971e8b75f2f522e2f2201a1ebb55f9e9d4cc28/Saucy/TripleTriad/GameLogic/TriadGameAgents.cs">Saucy agents</a>, <a href="https://github.com/PunishXIV/Saucy/blob/53971e8b75f2f522e2f2201a1ebb55f9e9d4cc28/Saucy/TripleTriad/GameLogic/TriadGameSolver.cs">result scoring</a></li>
+<li><strong>A real rules discrepancy is reproducible offline.</strong> AutoTripleTriadGrind terminates repeated synthetic draws after three restarts; its upstream tests still all pass. Saucy contains the same cap. The official guide describes five additional drawn games. <a href="https://github.com/XeldarAlz/FFXIV-AutoTripleTriadGrind/blob/71da7486806c04aa00c7539cc68fad1f51d0add3/AutoTripleTriadGrind/Core/Triad/Logic/Rules/TriadFlowRules.cs">Flow rules</a>, <a href="https://github.com/PunishXIV/Saucy/blob/53971e8b75f2f522e2f2201a1ebb55f9e9d4cc28/Saucy/TripleTriad/GameLogic/Modifiers/TriadGameModifierRules.cs">Saucy modifiers</a>, <a href="https://na.finalfantasyxiv.com/lodestone/playguide/contentsguide/goldsaucer/tripletriad/">official guide</a></li>
+<li><strong>Data collection is tractable; full collection automation is a larger problem.</strong> The snapshot has 475 cards, but only 244 occur in the gathered NPC reward lists. The remaining acquisition paths include duties, achievements, currencies, packs, and tournaments. An NPC match bot cannot by itself obtain the complete collection. <a href="https://ffxivcollect.com/api/triad/cards">Card API</a>, <a href="https://ffxivcollect.com/api/triad/npcs">NPC API</a></li>
+</ol>
+<h2 id="evidence-and-freshness">Evidence and freshness</h2>
+<p>Three labels apply throughout:</p>
+<ul>
+<li><strong>Verified:</strong> fetched data, inspected source behavior, or a reproduced offline result.</li>
+<li><strong>Source claim:</strong> an upstream project describes a feature that was not exercised in the game.</li>
+<li><strong>Design recommendation:</strong> the proposed architecture, algorithms, and acceptance criteria below.</li>
+</ul>
+<p>The public snapshots were retrieved on the research date. FFXIV Collect labels its newest gathered cards <strong>7.51</strong>. XIVAPI returned game-data version <code>5c744a8d8daafb25</code>, with schema <code>exdschema@2:rev:e773c41a90aed788cf4c1c48469fa85618ef01fb</code>. Those identifiers describe the fetched dataset; they do not prove compatibility with a particular installed client or regional release. The <a href="data/source-manifest.json">source manifest</a> records URLs, local write times, byte counts, and SHA-256 hashes.</p>
+<p>The card and NPC APIs are maintained community data sources. The game sheets exposed by XIVAPI provide an independent comparison for numerical card attributes. <strong>All four side values matched for all 475 collected cards.</strong> That check does not validate every acquisition condition or drop rate. <a href="https://v2.xivapi.com/docs/guides/sheets/">XIVAPI sheet access</a>, <a href="data/summary.json">validation summary</a></p>
+<p>The official guide itself still includes an explicitly historical “80 cards” statement for patch 2.51. Older guides also retain obsolete collection-size deck restrictions. Dates and patch context matter even when the host is authoritative. <a href="https://na.finalfantasyxiv.com/lodestone/playguide/contentsguide/goldsaucer/tripletriad/">Official guide</a>, <a href="https://na.finalfantasyxiv.com/lodestone/topics/detail/44fc093d851594d701d09c855c13e05605af3f95">patch 5.4 changes</a></p>
+<h2 id="card-list-and-data-model">Card list and data model</h2>
+<h3 id="snapshot-coverage">Snapshot coverage</h3>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Dataset</th>
+<th style="text-align: right;">Observed coverage</th>
+<th>Interpretation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>FFXIV Collect cards</td>
+<td style="text-align: right;">475</td>
+<td>Complete response from this endpoint on the research date</td>
+</tr>
+<tr>
+<td>Rarity 1 / 2 / 3 / 4 / 5</td>
+<td style="text-align: right;">53 / 99 / 171 / 83 / 69</td>
+<td>Computed from those card records</td>
+</tr>
+<tr>
+<td>Normal / Society / Scion / Primal / Garlean</td>
+<td style="text-align: right;">359 / 36 / 22 / 30 / 28</td>
+<td>“Normal” means no typed-card affiliation</td>
+</tr>
+<tr>
+<td>FFXIV Collect NPC records</td>
+<td style="text-align: right;">134</td>
+<td>Locations, prerequisite quests, rules, rewards</td>
+</tr>
+<tr>
+<td>Distinct cards in those NPC reward lists</td>
+<td style="text-align: right;">244</td>
+<td>Includes alternative sources; not a promise all NPCs are currently accessible</td>
+</tr>
+<tr>
+<td>XIVAPI TripleTriad rows</td>
+<td style="text-align: right;">146</td>
+<td>Includes two empty rows</td>
+</tr>
+<tr>
+<td>Nonempty NPC deck rows</td>
+<td style="text-align: right;">144</td>
+<td>Includes rows absent from the collection site's named NPC list</td>
+</tr>
+<tr>
+<td>Pack definitions</td>
+<td style="text-align: right;">7</td>
+<td>Contents and listed purchase costs, where present</td>
+</tr>
+<tr>
+<td>Community deck sample</td>
+<td style="text-align: right;">100</td>
+<td>Deliberately limited sample, not the site's complete deck database</td>
+</tr>
+</tbody>
+</table></div>
+<p>Counts are calculated from the saved <a href="data/collect-cards.raw.json">card</a>, <a href="data/collect-npcs.raw.json">NPC</a>, <a href="data/collect-packs.raw.json">pack</a>, and <a href="data/xivapi-npc-decks.raw.json">sheet</a> responses. The endpoints are linked in the manifest. <strong>A sheet row is not evidence of a reachable NPC.</strong> Do not advertise 144 playable opponents on the strength of this export alone.</p>
+<p>Each normalized card record has its card ID, album number, name, stars, type, four named directions, patch, duplicate-sale MGP, acquisition text, NPC source IDs, and source URL. Store values as <strong>top, right, bottom, left</strong>, with numeric <code>10</code> for A. Avoid copying the visual ordering of an HTML table: it can differ from clockwise order.</p>
+<p>Preserve these identities separately:</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Identity</th>
+<th>Why it must remain distinct</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>TripleTriadCard row ID</td>
+<td>Stable join between card names and numerical data</td>
+</tr>
+<tr>
+<td>Album number / EX number</td>
+<td>Presentation identifier; not interchangeable with row ID</td>
+</tr>
+<tr>
+<td>Inventory item ID</td>
+<td>Required to recognize and register an awarded card item</td>
+</tr>
+<tr>
+<td>TripleTriad NPC row ID</td>
+<td>Fixed cards, variable pool, fee, and rule references</td>
+</tr>
+<tr>
+<td>ENpcResident / ENpcBase identifiers</td>
+<td>Names, world objects, and location matching</td>
+</tr>
+<tr>
+<td>TripleTriadResident identifier</td>
+<td>Defeat/achievement tracking uses a different namespace</td>
+</tr>
+<tr>
+<td>Hand slot / card instance</td>
+<td>Two identical card identities can occur after match transformations</td>
+</tr>
+</tbody>
+</table></div>
+<p>For example, Tiisol Ja has card ID <strong>475</strong>, but album number <strong>No. 460</strong>. The collection API's NPC <code>resident_id</code> should not be passed blindly to the separate defeated-NPC function. <a href="https://ffxivcollect.com/triad/cards/475">Card record</a>, <a href="https://github.com/aers/FFXIVClientStructs/blob/d15a6e4a2dff32ce920e083ef18a034d4f445f58/FFXIVClientStructs/FFXIV/Client/Game/UI/UIState.cs">UIState declarations</a></p>
+<p><strong>Recommended runtime source hierarchy:</strong> use the installed client's Lumina sheets for card sides, types, rule IDs, and NPC deck pools; use game state for ownership and current match rules; use cached collection metadata for acquisition explanations and planning. Keep an offline snapshot for reproducibility. Never require a web request to select a move.</p>
+<p>TriadBuddy's loader demonstrates joins across card, NPC, item, rule, and map data. Its rule mapping is especially significant: old solver enum values differ from game-sheet IDs. For example, Same is sheet ID 4 but solver index 7. Map explicitly, or adopt the sheet IDs throughout a new engine. <a href="https://github.com/MgAl2O4/FFTriadBuddyDalamud/blob/1bffa57921d3eedbb201c227b6ea05f35a0ee75e/data/GameDataLoader.cs">TriadBuddy loader</a></p>
+<p>The current sheet has <strong>15 named advanced rules plus the empty/None entry</strong>. A code constant of 16 includes None; it is not evidence of sixteen distinct advanced mechanics. <a href="data/xivapi-rules.raw.json">Rule snapshot</a>, <a href="https://github.com/XeldarAlz/FFXIV-AutoTripleTriadGrind/blob/71da7486806c04aa00c7539cc68fad1f51d0add3/AutoTripleTriadGrind/Core/Triad/Data/TriadRuleId.cs">AutoTripleTriadGrind enum</a></p>
+<h2 id="rules-and-constraints">Rules and constraints</h2>
+<h3 id="deck-legality">Deck legality</h3>
+<p>A standard player deck has five distinct registered cards. At most one may be five-star, and at most two may be four-star or higher. Thus <code>5★ + 4★ + three ≤3★</code> and <code>4★ + 4★ + three ≤3★</code> are legal. High-rarity slots need not be filled. NPC pools must not be filtered through player deck restrictions. <a href="https://na.finalfantasyxiv.com/lodestone/playguide/contentsguide/goldsaucer/tripletriad/">Official rarity limits</a>, <a href="https://github.com/XeldarAlz/FFXIV-AutoTripleTriadGrind/blob/71da7486806c04aa00c7539cc68fad1f51d0add3/AutoTripleTriadGrind/Core/Triad/Logic/TriadDeck.cs">deck validation implementation</a></p>
+<p>Patch 5.4 removed collection-size restrictions on one-, two-, and three-star cards. Do not implement the old 30/60-card unlock thresholds. The same patch introduced the present 90-second deliberation budget with a separate, non-carrying five-second grace window per turn. The game can place a card automatically after timeout, which is also a state-synchronization concern for a plugin. <a href="https://na.finalfantasyxiv.com/lodestone/topics/detail/44fc093d851594d701d09c855c13e05605af3f95">Patch 5.4</a></p>
+<p>Validate a <strong>saved deck</strong> separately from the <strong>current hand</strong>. Random, Swap, Draft, and Sudden Death can invalidate assumptions about ownership, identity, or composition that were true at registration. Deck validation should return structured reasons, not merely a Boolean.</p>
+<p>The official UI guide describes five preset slots; both inspected TriadBuddy and Saucy readers expose indices 0–4. FFXIVClientStructs has storage for ten deck records. Treat storage capacity and supported UI slots separately; verify the writable slot range against the actual client. <a href="https://github.com/PunishXIV/Saucy/blob/53971e8b75f2f522e2f2201a1ebb55f9e9d4cc28/Saucy/TripleTriad/UI/Readers/TriadProfileDeckReader.cs">Profile reader</a>, <a href="https://github.com/aers/FFXIVClientStructs/blob/d15a6e4a2dff32ce920e083ef18a034d4f445f58/FFXIVClientStructs/FFXIV/Client/UI/Misc/GoldSaucerModule.cs">GoldSaucerModule</a></p>
+<h3 id="board-mechanics">Board mechanics</h3>
+<p>The board is 3×3. Players alternate placements into empty cells. Compare touching edges; ordinary capture requires a strictly stronger value, so ties do not flip. Cards have fixed orientations. End scoring includes the unplayed tenth card: a board-only tally can report the wrong winner. Normal captures do not themselves create unlimited chains. Combo propagation is associated with the special capture rules. <a href="https://github.com/XeldarAlz/FFXIV-AutoTripleTriadGrind/blob/71da7486806c04aa00c7539cc68fad1f51d0add3/AutoTripleTriadGrind/Core/Triad/Logic/TriadSimulation.cs">Simulation implementation</a>, <a href="https://github.com/XeldarAlz/FFXIV-AutoTripleTriadGrind/blob/71da7486806c04aa00c7539cc68fad1f51d0add3/AutoTripleTriadGrind/Core/Triad/Logic/Rules/TriadCaptureRules.cs">capture rules</a></p>
+<p>The following is a compact mechanics map. The last column gives proposed implementation handling, not evidence that every upstream project handles it fully.</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Rule</th>
+<th>Effect</th>
+<th>Required handling</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>All Open</td>
+<td>Both hands visible</td>
+<td>Exact known-hand state</td>
+</tr>
+<tr>
+<td>Three Open</td>
+<td>Three cards per hand exposed</td>
+<td>Track visibility by slot</td>
+</tr>
+<tr>
+<td>Same</td>
+<td>At least two touching values match</td>
+<td>Evaluate friendly and enemy participants</td>
+</tr>
+<tr>
+<td>Plus</td>
+<td>At least two touching sums match</td>
+<td>Group equal sums before mutation</td>
+</tr>
+<tr>
+<td>Sudden Death</td>
+<td>Draws restart using controlled cards</td>
+<td>Carry hands, round count, and remaining card</td>
+</tr>
+<tr>
+<td>Random</td>
+<td>Chosen deck replaced from collection</td>
+<td>Read actual dealt hand</td>
+</tr>
+<tr>
+<td>Order</td>
+<td>Cards must follow deck order</td>
+<td>Ordered deck optimization</td>
+</tr>
+<tr>
+<td>Chaos</td>
+<td>Game selects the playable card</td>
+<td>Honor forced slot</td>
+</tr>
+<tr>
+<td>Reverse</td>
+<td>Lower values capture higher ones</td>
+<td>Rule-aware comparison</td>
+</tr>
+<tr>
+<td>Fallen Ace</td>
+<td>1 beats A; interaction reverses under Reverse</td>
+<td>Explicit exceptional comparison</td>
+</tr>
+<tr>
+<td>Ascension</td>
+<td>Typed cards gain shared type bonuses</td>
+<td>Preserve raw and effective values</td>
+</tr>
+<tr>
+<td>Descension</td>
+<td>Typed cards receive shared type penalties</td>
+<td>Apply floor and ordering correctly</td>
+</tr>
+<tr>
+<td>Swap</td>
+<td>One card exchanged before play</td>
+<td>Reconcile actual hand instances</td>
+</tr>
+<tr>
+<td>Draft</td>
+<td>Cards selected from supplied offers</td>
+<td>Separate draft-selection controller</td>
+</tr>
+<tr>
+<td>Roulette</td>
+<td>Rules resolved randomly</td>
+<td>Observe resolved rules before solving</td>
+</tr>
+</tbody>
+</table></div>
+<p>Mechanics are represented in the inspected <a href="https://github.com/XeldarAlz/FFXIV-AutoTripleTriadGrind/blob/71da7486806c04aa00c7539cc68fad1f51d0add3/AutoTripleTriadGrind/Core/Triad/Logic/Rules/TriadCaptureRules.cs">capture rules</a>, <a href="https://github.com/XeldarAlz/FFXIV-AutoTripleTriadGrind/blob/71da7486806c04aa00c7539cc68fad1f51d0add3/AutoTripleTriadGrind/Core/Triad/Logic/Rules/TriadFlowRules.cs">flow rules</a>, and <a href="https://github.com/XeldarAlz/FFXIV-AutoTripleTriadGrind/blob/71da7486806c04aa00c7539cc68fad1f51d0add3/AutoTripleTriadGrind/Core/Triad/Logic/Rules/TriadTypeRules.cs">type rules</a>. These implementations are useful specifications to test, not substitutes for client observations.</p>
+<p>For Same and Plus, one friendly neighbor can participate in the matching condition while an enemy is captured. Only newly captured enemy cards seed the relevant Combo worklist. Build that worklist from a consistent view of the placement, then apply cascades with an explicit visited/ownership policy. Test normal and special captures occurring on the same placement.</p>
+<p>Type shifts deserve special attention. Saucy separates the preexisting type modifier used during placement from the increment applied after captures. A new implementation that increments first can disagree with this behavior. Confirm event ordering using a targeted client fixture. Keep unclamped type counts separately from displayed values; applying another modifier to an already clamped value can produce errors. <a href="https://github.com/PunishXIV/Saucy/blob/53971e8b75f2f522e2f2201a1ebb55f9e9d4cc28/Saucy/TripleTriad/GameLogic/Modifiers/TriadGameModifierRules.cs">Saucy type-shift implementation</a></p>
+<p>Regional and NPC rules can combine. Rules may differ from a cached preview, and some NPCs ignore regional rules. Read the active preparation/board state every match and rebuild the simulation when it changes. Do not infer the current combination solely from a static NPC database. <a href="https://github.com/PunishXIV/Saucy/blob/53971e8b75f2f522e2f2201a1ebb55f9e9d4cc28/Saucy/TripleTriad/GameLogic/TriadNpcSimulationRules.cs">Regional-rule reconstruction</a></p>
+<p>Sudden Death's official description allows five additional drawn games. The reviewed implementations stop their simulation earlier; this needs an explicit compatibility decision, not an undocumented search shortcut. <a href="https://na.finalfantasyxiv.com/lodestone/playguide/contentsguide/goldsaucer/tripletriad/">Official description</a>, <a href="validation/rule-probe-output.txt">reproduction</a></p>
+<h3 id="tournaments-and-other-modes">Tournaments and other modes</h3>
+<p>Ordinary NPC collection matches are the best-supported automation target. Open/Invitational events introduce a draft phase and tournament-wide state. Patch 5.4 describes three sets of offered cards and three-match competitions; tournament participation is consequently more than pressing the normal challenge button. <a href="https://na.finalfantasyxiv.com/lodestone/topics/detail/44fc093d851594d701d09c855c13e05605af3f95">Tournament introduction</a></p>
+<p>TriadBuddy explicitly limits its solver to NPC matches because it relies on known NPC card pools. Removing its PvP guard does not supply a model for an arbitrary human opponent's hand. Draft NPCs and human competitors also require different knowledge assumptions from ordinary fixed-pool NPCs. <a href="https://github.com/MgAl2O4/FFTriadBuddyDalamud/blob/1bffa57921d3eedbb201c227b6ea05f35a0ee75e/README.md">TriadBuddy scope</a></p>
+<p>Battlehall travel and ordinary NPC interaction are distinct from solving PvP matches there. If tournament support is added, it needs its own mode detector, draft optimizer, opponent model, scoring objective, queue handling, and completion tests. It should remain marked unsupported until those paths have been validated.</p>
+<h2 id="deck-building-and-strategy">Deck building and strategy</h2>
+<h3 id="practical-deck-seeds">Practical deck seeds</h3>
+<p>These are <strong>legal illustrative starting points</strong>, checked against the gathered card data. They are not measured best decks, and ownership remains a requirement. Each can be inspected in <a href="data/example-decks.json">example-decks.json</a>.</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Purpose</th>
+<th>Five cards</th>
+<th>Why this is a useful seed</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Tutorial baseline</td>
+<td>Dodo, Sabotender, Bomb, Mandragora, Coeurl</td>
+<td>The initial collection provides a reproducible starting benchmark</td>
+</tr>
+<tr>
+<td>Ordinary corner play</td>
+<td>Squall Leonhart, Senor Sabotender, Estinien, Lucia goe Junius, Hilda</td>
+<td>Distinct double-eight orientations, a four-star, and a double-A card</td>
+</tr>
+<tr>
+<td>Ascension, Primals</td>
+<td>Ifrit, Titan, Garuda, Ramuh, Shiva</td>
+<td>All typed alike; legal two-four-star composition</td>
+</tr>
+<tr>
+<td>Ascension, Scions</td>
+<td>Thancred, Y'shtola, Urianger, Heavensward Thancred, Heavensward Y'shtola</td>
+<td>Shared type with varied edge coverage</td>
+</tr>
+<tr>
+<td>Budget Reverse</td>
+<td>Tonberry, Spriggan, Bomb, Mandragora, Gaelicat</td>
+<td>Low sides provide candidates under Reverse; high sides require protection</td>
+</tr>
+</tbody>
+</table></div>
+<p>Card names, rarities, affiliations, and directional values come from the saved <a href="data/cards.csv">catalogue</a>, numerically cross-checked against XIVAPI. Selection and tactical interpretation are this report's analysis. Senor Sabotender costs 200,000 MGP in the gathered source, so the ordinary-corner seed is not presented as an inexpensive beginner shopping list. <a href="https://ffxivcollect.com/triad/cards/118">Senor Sabotender</a></p>
+<p>Under ordinary rules, adjacent strong sides can face the board interior while weak sides face the edge. For example, Estinien's top/right 8s fit a lower-left defensive placement; Lucia's top/left 8s fit lower-right; Hilda's bottom/left 8s fit upper-right. Squall's right/bottom As fit upper-left. That describes favorable orientations, not a fixed script: captures, move order, and special rules can make another placement better.</p>
+<p>Additional strategic conclusions from the rules:</p>
+<ul>
+<li><strong>Play for the terminal result.</strong> Taking two cards now may expose a larger recapture. An apparently quiet move can deny the opponent its last favorable square.</li>
+<li><strong>Ordinary ties can protect cards.</strong> A strong equal edge blocks basic capture, but Same/Plus can bypass that intuition.</li>
+<li><strong>Same/Plus change the value of weak cards.</strong> Evaluate matching patterns and future combo access; a ranking based only on total side strength discards useful cards.</li>
+<li><strong>Reverse changes both offense and defense.</strong> Low values become strong; preserve the Fallen Ace interaction instead of simply negating every heuristic.</li>
+<li><strong>Ascension helps both owners of a type.</strong> Shared affiliation can improve the opposing hand too. Descension can favor untyped cards under ordinary comparison, while Reverse changes that conclusion.</li>
+<li><strong>Order makes sequencing part of the deck.</strong> The same five cards have up to 120 permutations; caching by a sorted card set loses information.</li>
+<li><strong>Swap requires resilience.</strong> A strategy dependent on retaining a single ace may have weak expected performance after exchange.</li>
+<li><strong>Do not assume the NPC always plays greedily.</strong> That is an opponent model to measure, not a game rule.</li>
+</ul>
+<h3 id="optimizer-recommendation">Optimizer recommendation</h3>
+<p>Optimize per <strong>owned collection × opponent pool × active rules × goal</strong>, rather than publishing a single universal deck. Use heuristics to create a manageable candidate pool, search legal compositions, simulate both starting-player cases, then reevaluate finalists with independent seeds and the actual live policy.</p>
+<p>Candidate filters should retain diversity by direction, type, rarity, and special-rule utility. Strict numerical dominance pruning is unsafe under Same, Plus, Reverse, and Fallen Ace. Even equivalent stat vectors may have different ownership, affiliation, or acquisition implications. Saucy already has typed-card pool scoring and parallel deck enumeration; these are useful starting points but do not establish a globally optimal deck. <a href="https://github.com/PunishXIV/Saucy/blob/53971e8b75f2f522e2f2201a1ebb55f9e9d4cc28/Saucy/TripleTriad/GameLogic/TriadDeckOptimizer.Pool.cs">Pool selection</a>, <a href="https://github.com/PunishXIV/Saucy/blob/53971e8b75f2f522e2f2201a1ebb55f9e9d4cc28/Saucy/TripleTriad/GameLogic/TriadDeckOptimizer.Search.cs">deck search</a></p>
+<p>A generated candidate should carry its score estimate, sample count, rules fingerprint, opponent pool fingerprint, solver version, ownership fingerprint, and evaluation date. Reevaluate when any of those assumptions changes. Use public deck votes and guide recommendations as candidate seeds, never as measured win probabilities. The downloaded <a href="data/community-decks-sample.csv">community deck sample</a> preserves identifiers and legality checks without treating ratings as performance evidence.</p>
+<h2 id="public-repository-audit">Public repository audit</h2>
+<p>The <a href="data/repository-manifest.json">repository manifest</a> contains full hashes and commit timestamps. All linked source findings below use pinned revisions. Default-branch code is not necessarily identical to the latest distributed binary.</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Project</th>
+<th>Inspected revision</th>
+<th>License / build snapshot</th>
+<th>Best use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>MgAl2O4/FFTriadBuddyDalamud</td>
+<td><code>1bffa57921d3</code></td>
+<td>MIT; Dalamud SDK 15.0.0</td>
+<td>Small NPC assistant, data loader, readers, optimization UI</td>
+</tr>
+<tr>
+<td>MgAl2O4/FFTriadBuddy</td>
+<td><code>425f72ecb3ba</code></td>
+<td>MIT; standalone snapshot updated for 7.25</td>
+<td>Solver ancestry, simulation and screenshot tooling</td>
+</tr>
+<tr>
+<td>PunishXIV/Saucy</td>
+<td><code>53971e8b75f2</code></td>
+<td>BSD-3-Clause root; SDK 15.0.0; version 2.1.2.5</td>
+<td>Permissive automation and modern integration reference</td>
+</tr>
+<tr>
+<td>XeldarAlz/FFXIV-AutoTripleTriadGrind</td>
+<td><code>71da7486806c</code></td>
+<td>AGPL-3.0-or-later; SDK 15.0.0; version 1.2.1.0</td>
+<td>Closest complete NPC collection workflow</td>
+</tr>
+<tr>
+<td>curtissvoboda/FFTriadBuddyEnhanced</td>
+<td><code>4644dbe7ccf3</code></td>
+<td>MIT file; SDK 13.0.0</td>
+<td>Cautionary comparison for solver claims</td>
+</tr>
+<tr>
+<td>aers/FFXIVClientStructs</td>
+<td><code>d15a6e4a2dff</code></td>
+<td>MIT</td>
+<td>Native structures and typed interop definitions</td>
+</tr>
+<tr>
+<td>fae-industries/ffxiv-collect</td>
+<td><code>f4a9c97bff06</code></td>
+<td>Data application source inspected</td>
+<td>API semantics and acquisition metadata</td>
+</tr>
+</tbody>
+</table></div>
+<p>The Dalamud plugin's <code>triad-shared</code> submodule is pinned to <strong><code>85c2c4476a30f316bfb1ba5c0343cba5b584e371</code></strong>, which is distinct from the separately cloned standalone HEAD. Preserve the actual submodule revision when reproducing plugin behavior. <a href="https://github.com/MgAl2O4/FFTriadBuddyDalamud/blob/1bffa57921d3eedbb201c227b6ea05f35a0ee75e/.gitmodules">Submodule definition</a></p>
+<h3 id="triadbuddy">TriadBuddy</h3>
+<p>The plugin provides NPC move suggestions, pre-match deck evaluation, deck optimization, and collection assistance. Its own README rules out general PvP solving. The loader obtains live client sheet data, so the standalone repository's older XML snapshot is not the right card database for a new plugin. <a href="https://github.com/MgAl2O4/FFTriadBuddyDalamud/blob/1bffa57921d3eedbb201c227b6ea05f35a0ee75e/README.md">Plugin overview</a>, <a href="https://github.com/MgAl2O4/FFTriadBuddyDalamud/blob/1bffa57921d3eedbb201c227b6ea05f35a0ee75e/data/GameDataLoader.cs">loader</a></p>
+<p>Useful integration boundaries are <code>UIReaderTriadGame</code>, <code>UIReaderTriadPrep</code>, <code>UIReaderTriadResults</code>, <code>GameUIParser</code>, <code>SolverGame</code>, and the unsafe collection/profile readers. <code>SolverGame.UpdateGameRunSolver</code> calls the solver synchronously and returns <code>Task.FromResult</code>; the async-looking caller does not make the expensive work asynchronous. A rewrite should explicitly move pure computation off the framework thread. <a href="https://github.com/MgAl2O4/FFTriadBuddyDalamud/blob/1bffa57921d3eedbb201c227b6ea05f35a0ee75e/plugin/SolverGame.cs">SolverGame</a></p>
+<h3 id="saucy">Saucy</h3>
+<p>Its Triple Triad flow distinguishes preparation, deck selection, board turns, results, and rematches. Separate components track goals, ownership, rewards, registration, and nearby NPC validity. The deck cache includes ownership-at-build information and regional signatures. Travel integrations include Lifestream and vnavmesh. <a href="https://github.com/PunishXIV/Saucy/blob/53971e8b75f2f522e2f2201a1ebb55f9e9d4cc28/Saucy/TripleTriad/Automation/TriadAutomator.cs">Automator</a>, <a href="https://github.com/PunishXIV/Saucy/blob/53971e8b75f2f522e2f2201a1ebb55f9e9d4cc28/Saucy/TripleTriad/GameLogic/DeckCache/TriadOptimizedDeckCacheEntry.cs">cache structures</a>, <a href="https://github.com/PunishXIV/Saucy/tree/53971e8b75f2f522e2f2201a1ebb55f9e9d4cc28/Saucy/TripleTriad/Collection/Navigation">navigation tree</a></p>
+<p><code>TriadBoardAutomation</code> reads a fresh board, checks turn readiness, obtains a move, and submits a native addon callback. It also updates the addon and writes its turn-state field. This is version-sensitive client behavior, not a stable Dalamud gameplay API. The local reward-agent structure uses an explicit field offset. Treat such operations as isolated adapters with their own compatibility checks. <a href="https://github.com/PunishXIV/Saucy/blob/53971e8b75f2f522e2f2201a1ebb55f9e9d4cc28/Saucy/TripleTriad/Automation/TriadBoardAutomation.cs">Board automation</a>, <a href="https://github.com/PunishXIV/Saucy/blob/53971e8b75f2f522e2f2201a1ebb55f9e9d4cc28/Saucy/TripleTriad/UI/Readers/TriadLocalClientStructs.cs">local structures</a></p>
+<p>The live move path still calls <code>FindNextMove</code> synchronously. It suspends background deck work while a match is active. The live agent is <code>CarloTheExplorer</code>; the search explores smaller action spaces and uses random rollouts for larger ones. Opponent layers aggregate outcomes rather than implementing a general adversarial minimax policy. Describe its output as an estimate under a model. <a href="https://github.com/PunishXIV/Saucy/blob/53971e8b75f2f522e2f2201a1ebb55f9e9d4cc28/Saucy/TripleTriad/UI/Session/Move/TriadSession.Move.cs">Live move path</a>, <a href="https://github.com/PunishXIV/Saucy/blob/53971e8b75f2f522e2f2201a1ebb55f9e9d4cc28/Saucy/TripleTriad/GameLogic/TriadGameAgents.cs">agents</a></p>
+<h3 id="autotripletriadgrind">AutoTripleTriadGrind</h3>
+<p>This is the most directly relevant complete-product reference. <code>CollectPlanner</code> assigns desired cards to eligible NPCs, preferring reward overlap, then orders visits by zone and proximity. It is a useful greedy heuristic; it does not optimize expected farming time using measured drop rates. <a href="https://github.com/XeldarAlz/FFXIV-AutoTripleTriadGrind/blob/71da7486806c04aa00c7539cc68fad1f51d0add3/AutoTripleTriadGrind/Core/Planning/CollectPlanner.cs">Collection planner</a></p>
+<p><code>AutoCommon.TriadMatch</code> handles challenge, deck selection, board play, result reading, and rematches. Unlike Saucy's inspected live path, it copies a board snapshot and solves through <code>Task.Run</code>. It has explicit timeouts and an unreadable-board fallback. It checks turn readiness when a result returns, but the inspected commit path does not compare a full snapshot fingerprint before placing the returned move. That creates a stale-result risk to test; it is not an observed live failure. <a href="https://github.com/XeldarAlz/FFXIV-AutoTripleTriadGrind/blob/71da7486806c04aa00c7539cc68fad1f51d0add3/AutoTripleTriadGrind/Core/Tasks/AutoCommon.TriadMatch.cs">Match controller</a></p>
+<p>Its pure logic test project can run without the game. <strong>All 18 upstream tests passed</strong> under .NET 10.0.102. They cover basic captures, several rules, an initial Sudden Death restart, solver behavior, and optimizer behavior. They do not establish complete rule-combination coverage, full restart limits, live callback correctness, travel reliability, or card-drop accuracy. <a href="https://github.com/XeldarAlz/FFXIV-AutoTripleTriadGrind/blob/71da7486806c04aa00c7539cc68fad1f51d0add3/AutoTripleTriadGrind.Tests/SimulationTests.cs">Simulation tests</a>, <a href="https://github.com/XeldarAlz/FFXIV-AutoTripleTriadGrind/blob/71da7486806c04aa00c7539cc68fad1f51d0add3/AutoTripleTriadGrind.Tests/SolverTests.cs">solver tests</a>, <a href="validation/upstream-tests.trx">saved results</a></p>
+<p>The third-party notices explicitly identify portions adapted from Puni.sh and MgAl2O4. Accordingly, agreement between these solvers is not fully independent evidence: related implementations can carry the same mistake. <a href="https://github.com/XeldarAlz/FFXIV-AutoTripleTriadGrind/blob/71da7486806c04aa00c7539cc68fad1f51d0add3/THIRD-PARTY-NOTICES.md">Third-party notices</a></p>
+<h3 id="fftriadbuddyenhanced">FFTriadBuddyEnhanced</h3>
+<p>The README claims broad PvP support and sophisticated learning. Inspection gives insufficient grounds to recommend it: <code>SimulateGame</code> creates hypothetical cards with independently random side values rather than sampling valid remaining hands. Such rollouts can explore cards and combinations that are not in the legal opponent model. The project also targets an older SDK snapshot. No build or gameplay verification was performed for this fork. Its claims should not be used as evidence that the PvP problem is solved. <a href="https://github.com/curtissvoboda/FFTriadBuddyEnhanced/blob/4644dbe7ccf3affc3e6f0a3fb737fcdb7c4f727d/plugin/SolverGame.cs">PvP implementation</a>, <a href="https://github.com/curtissvoboda/FFTriadBuddyEnhanced/blob/4644dbe7ccf3affc3e6f0a3fb737fcdb7c4f727d/TriadBuddy.csproj">project file</a></p>
+<h3 id="licensing-and-distribution-constraints">Licensing and distribution constraints</h3>
+<p>The MIT and BSD sources provide a permissive starting point subject to their notices and conditions; preserve inherited notices and audit dependencies. AutoTripleTriadGrind declares AGPL-3.0-or-later and has additional notice/trademark documents. Choose that path deliberately before copying its implementation. A rewritten file layout does not erase provenance. These are repository observations, not a legal compatibility opinion. <a href="https://github.com/MgAl2O4/FFTriadBuddyDalamud/blob/1bffa57921d3eedbb201c227b6ea05f35a0ee75e/LICENSE">MIT license</a>, <a href="https://github.com/PunishXIV/Saucy/blob/53971e8b75f2f522e2f2201a1ebb55f9e9d4cc28/LICENCE.md">Saucy license</a>, <a href="https://github.com/XeldarAlz/FFXIV-AutoTripleTriadGrind/blob/71da7486806c04aa00c7539cc68fad1f51d0add3/LICENSE.md">AutoTripleTriadGrind licensing</a></p>
+<p>There is also a distribution constraint independent of source licensing: Dalamud's official repository guidelines restrict automated server interactions and competitive advantages. A fully automated gameplay plugin should not be planned around acceptance into the official repository. A custom repository changes distribution, not Square Enix's rules. Square Enix prohibits third-party tools and identifies automation as botting, with account penalties possible. <a href="https://dalamud.dev/plugin-publishing/restrictions/">Dalamud restrictions</a>, <a href="https://na.finalfantasyxiv.com/lodestone/topics/detail/68f4c4d3bdea34f732ee8db3425122b8b8d6ec3b">Square Enix policy</a></p>
+<h2 id="reproduced-gaps-and-priorities">Reproduced gaps and priorities</h2>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Finding</th>
+<th>Evidence level</th>
+<th>Recommended response</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Sudden Death stops after three restarts</td>
+<td>Source in two projects; reproduced in AutoTripleTriadGrind</td>
+<td>Model official round limit separately from a search horizon; validate on current client</td>
+</tr>
+<tr>
+<td>Result score can rank lower win chance higher</td>
+<td>Source and numeric probe</td>
+<td>Replace opaque category ranking with an explicit goal utility</td>
+</tr>
+<tr>
+<td>Opponent policy is approximate</td>
+<td>Source</td>
+<td>Compare random, greedy, robust, and empirically fitted policies</td>
+</tr>
+<tr>
+<td>Live solve may occupy the framework thread</td>
+<td>Source in inspected Saucy/TriadBuddy paths</td>
+<td>Snapshot on framework thread; compute on worker with deadline</td>
+</tr>
+<tr>
+<td>Background move freshness check is incomplete</td>
+<td>Source-based risk in inspected AutoTripleTriadGrind path</td>
+<td>Match/round/turn generation plus fingerprint validation</td>
+</tr>
+<tr>
+<td>Native offsets and callbacks can drift</td>
+<td>Source-level dependency</td>
+<td>Centralize adapters; reject unknown layouts</td>
+</tr>
+<tr>
+<td>Draft rule object exists without demonstrated draft automation</td>
+<td>Source scope distinction</td>
+<td>Track selection phase and tournament lifecycle separately</td>
+</tr>
+<tr>
+<td>Card identity inferred from displayed attributes can be ambiguous</td>
+<td>Structural limitation</td>
+<td>Match candidate sets with hand history, type, rarity, and known pools</td>
+</tr>
+</tbody>
+</table></div>
+<p>The <a href="validation/RuleProbe/Program.cs">offline probe</a> forced consecutive draws using synthetic equal-sided cards. The unmodified referenced engine played <strong>36 placements, three restarts, then BlueDraw</strong>. The fixture deliberately uses synthetic repeated cards to isolate the rule; it is not a legal saved player deck and does not claim to reproduce an actual NPC encounter.</p>
+<p>The same probe compared outcome estimates A = 40% win / 35% draw / 25% loss and B = 45% win / 50% draw / 5% loss. The inherited score gives A <strong>10.4</strong>, B <strong>0.5</strong>, and prefers A. B is better for both win probability and loss avoidance. This is a concrete reason to change the objective before attempting more search depth. <a href="https://github.com/XeldarAlz/FFXIV-AutoTripleTriadGrind/blob/71da7486806c04aa00c7539cc68fad1f51d0add3/AutoTripleTriadGrind/Core/Triad/Logic/TriadSolver.cs">Scoring implementation</a>, <a href="validation/rule-probe-output.txt">probe output</a></p>
+<p>The inspected board structure exposes sides, rarity, type, owner, and occupancy, but does not identify its unknown bytes as a card ID. Do not reinterpret those bytes as IDs without evidence. A solver can often use an equivalence class of cards; collection accounting must resolve an actual identity. <a href="https://github.com/aers/FFXIVClientStructs/blob/d15a6e4a2dff32ce920e083ef18a034d4f445f58/FFXIVClientStructs/FFXIV/Client/UI/AddonTripleTriad.cs">AddonTripleTriad structure</a></p>
+<h2 id="proposed-architecture">Proposed architecture</h2>
+<p>This section is the recommended design, not a description of a plugin implemented during this research.</p>
+<div class="architecture" aria-label="Architecture flow">
+<div><strong>1. Observe</strong><br>Client sheets + addon state → versioned catalogue and immutable snapshot</div>
+<div><strong>2. Decide</strong><br>Rules engine + hidden-hand model → deadline-bounded search</div>
+<div><strong>3. Validate</strong><br>Fresh snapshot + legal action → client adapter</div>
+<div><strong>4. Coordinate</strong><br>Selected goals → collection plan → session state machine</div>
+<div><strong>5. Verify</strong><br>Result + inventory + ownership → reward journal</div>
+<div><strong>6. Continue</strong><br>Journal → updated collection plan → next match or completion</div></div>
+
+<h3 id="components-and-contracts">Components and contracts</h3>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Owns</th>
+<th>Must not own</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Catalogue</td>
+<td>Card definitions, NPC pools, source joins, version IDs</td>
+<td>Live pointers or UI actions</td>
+</tr>
+<tr>
+<td>Rules engine</td>
+<td>Legal actions, captures, transforms, scoring, round transitions</td>
+<td>Network access or Dalamud services</td>
+</tr>
+<tr>
+<td>Observation adapter</td>
+<td>Addon lifecycle, raw reads, validation, canonical snapshots</td>
+<td>Strategic choices</td>
+</tr>
+<tr>
+<td>Belief model</td>
+<td>Hidden-hand candidates and observation history</td>
+<td>Fictional certainty about hidden slots</td>
+</tr>
+<tr>
+<td>Solver</td>
+<td>Move selection within deadline, estimates, diagnostics</td>
+<td>Client interaction</td>
+</tr>
+<tr>
+<td>Deck optimizer</td>
+<td>Candidate generation and independent evaluation</td>
+<td>Blocking the render/framework loop</td>
+</tr>
+<tr>
+<td>Session controller</td>
+<td>Challenge/play/result/register/rematch lifecycle</td>
+<td>Rule arithmetic duplicated from engine</td>
+</tr>
+<tr>
+<td>Collection planner</td>
+<td>Reachable goals, ordering, budgets, replanning</td>
+<td>Assuming every database NPC is unlocked</td>
+</tr>
+<tr>
+<td>Action adapter</td>
+<td>Validated, versioned game interactions</td>
+<td>Unchecked retries or stale actions</td>
+</tr>
+<tr>
+<td>Journal</td>
+<td>Outcome/reward accounting and recovery state</td>
+<td>Treating a click as an acknowledged result</td>
+</tr>
+</tbody>
+</table></div>
+<p>In C#, keep the core library independent of Dalamud so deterministic fixtures and benchmarks run in CI. Use immutable or exclusively owned snapshots. No native pointer, addon node reference, or mutable shared rule object may cross into the worker solver. Rule instances with match state need deep copies per worker; the existing projects already recognize this need. <a href="https://github.com/XeldarAlz/FFXIV-AutoTripleTriadGrind/blob/71da7486806c04aa00c7539cc68fad1f51d0add3/AutoTripleTriadGrind/Core/Triad/Logic/TriadSolver.cs">Worker-copy implementation</a></p>
+<p>A match snapshot should include session ID, match generation, round number, turn generation, observed opponent identity, current mode, effective rules, board occupancy/owners, known card attributes, player hand slots, forced card slot, remaining counts, type modifiers, observed timer, and confidence/error fields. Preserve observation history separately from current display state.</p>
+<p>A solver result should include its input fingerprint, selected hand slot and board cell, estimated win/draw/loss, sampled hypotheses, work count, elapsed time, and termination reason. Before committing, reread the current state and check fingerprint, legal slot, empty cell, forced-card constraint, and turn readiness. If the result is stale, discard it and solve again.</p>
+<h3 id="session-lifecycle">Session lifecycle</h3>
+<p>Use explicit states: <code>Idle → ResolveGoal → Travel → AwaitNPC → Challenge → ReadPreparation → SelectDeck → AwaitBoard → ObserveTurn → Solve → ValidateAndPlace → AwaitTransition → ReadResult → ReconcileReward → RegisterCard → ReplanOrRematch → Completed</code>.</p>
+<p>Every state needs a deadline, bounded retries, an expected observation, and a recoverable exit. An action is complete only when its expected state change appears. Store an action-generation identifier so a frame callback cannot submit the same turn twice. Distinguish “finish this match then stop” from immediate cancel.</p>
+<p>For a local-NPC first release, keep travel optional. For collection routing, use a narrow movement IPC contract with explicit start, progress, arrival, cancellation, and failure results. Unknown entrances, locked zones, incomplete quests, and unavailable NPCs should produce a visible blocked reason and allow another reachable goal. Map coordinates are not sufficient world-navigation coordinates; world positions and territory transitions need their own validated data.</p>
+<p>Registration is a separate transaction: record the awarded item, wait for inventory state, use the card if unregistered, then confirm the ownership bit. Do not mark acquisition complete merely because the result screen was closed. Inventory-full and duplicate cases need independent handling. Reward totals must be idempotent across repeated scans and reconnect recovery.</p>
+<p>Preserve the user's chosen deck slot before writing an optimized deck. Restore it when the session ends if restoration is enabled and the user has not independently changed it. Store this backup outside the volatile session. Automation should never silently consume all deck slots.</p>
+<h3 id="runtime-integration">Runtime integration</h3>
+<p>Prefer typed FFXIVClientStructs wrappers and Dalamud lifecycle/framework services where available. UI actions and native reads remain framework-thread work. Put version-specific callback details, offsets, signatures, and addon schemas into one compatibility layer. Detect unsupported layouts early and stop issuing dependent actions.</p>
+<p>Do not make fixed frame counts the sole acknowledgement mechanism. Frame rate, animation timing, and latency vary. Poll a validated state predicate or consume a lifecycle event, with a monotonic time deadline. Log the relevant snapshot when parsing fails so the issue can be reproduced offline.</p>
+<p>Use stable game IDs for internal identity and localization only for display. Where UI text must be parsed, retain language-specific test cases and a conservative unknown outcome. Configuration and reward logs should be scoped to the current character; switching characters invalidates ownership-dependent caches.</p>
+<h2 id="solver-design-reliable-before-more-elaborate">Solver design: reliable before more elaborate</h2>
+<h3 id="search-model">Search model</h3>
+<p>For a fully known position, use iterative deepening and an exact endgame search with transposition caching. A robust adversarial policy is minimax/alpha-beta; an NPC exploitation policy uses an explicit model of the NPC's actions. Those solve different objectives and should be selectable and benchmarked separately.</p>
+<p>Do not assume that a nine-cell board makes an opening full-width search cheap. With two known five-card hands and no forced order, a simple upper count is <code>9! × 5! × 5! = 5,225,472,000</code> placement sequences before considering pruning. This is a combinatorial calculation, not a measured runtime. Exact search is much more attractive late in the match.</p>
+<p>For hidden NPC cards, derive a constrained belief over fixed cards, variable pool selections, exposed slots, and cards already played. Remove impossible hands as observations arrive. Sample <strong>complete consistent hands without replacement</strong>, not independently generated card values or every variable card simultaneously. An NPC with a fixed core and optional pool still has five cards in a match.</p>
+<p>Use expectimax for explicit random events when feasible. For larger hidden-state trees, information-set Monte Carlo search is a candidate; benchmark it against a simpler belief-sampling baseline before adopting it. Be careful with determinization: choosing a different future policy for each hidden hand can overestimate what a player who has not seen the hand can achieve. Chance variables, hidden information, and opponent choice must remain separate concepts. Cowling, Powley, and Whitehouse's original ISMCTS paper explains this strategy-fusion problem and information-set search; it is a methodological resource, not a Triple Triad benchmark. <a href="https://eprints.whiterose.ac.uk/id/eprint/75048/1/CowlingPowleyWhitehouse2012.pdf">Original research paper</a></p>
+<p>A transposition key needs the board, ownership, hand instances, remaining pool constraints, side to move, forced slot, effective rules, type counts, and Sudden Death round state. Symmetry reductions must transform card directions consistently; rotating only the board is invalid. Disable a reduction whenever its invariants are not proven for the active rules.</p>
+<h3 id="objective-and-performance-budget">Objective and performance budget</h3>
+<p>Choose a transparent objective such as <code>U = P(win) + drawWeight × P(draw)</code>. For NPC card farming, evaluate verified target drops per elapsed time; for MGP, evaluate expected net reward after fees per elapsed time. The weight is a product choice and should be visible in diagnostics.</p>
+<p>For a target with per-win drop chance <code>q</code>, win chance <code>p</code>, and average cycle time <code>t</code>, a simple independent-trial model gives expected time approximately <code>t / (p × q)</code>. This is an explanatory model, not a claim that any particular drop has a known rate. Sudden Death, variable durations, multiple rewards, inventory handling, and travel require an expanded model. Do not infer drop rates from collection-site ownership percentages.</p>
+<p>Proposed initial engineering budgets: produce a legal first candidate quickly; spend roughly 100–300 ms improving an ordinary move on the reference machine; permit an explicitly bounded extension when the measured timer allows it. These are targets to benchmark, not measured capabilities of the reviewed code. Cancel stale work and deprioritize deck optimization while a live move is pending.</p>
+<p>If the parser is uncertain, the default should be to suspend automated action and show the reason. A fallback move policy may be useful, but only when hand/board legality is independently known; “play anything” should not hide a broken reader. Record fallback use separately from solver performance.</p>
+<h3 id="collection-planning">Collection planning</h3>
+<p>Maintain selected goals, registered ownership, inventory-pending cards, reachable NPCs, fees, estimated match duration, and measured reward evidence. Assign goals to NPCs using expected remaining time and reward overlap, then account for travel. Replan after every newly registered card or reachability change.</p>
+<p>A coverage-first heuristic, as in AutoTripleTriadGrind, is a sensible baseline. Improve it only when measurements justify the extra complexity. A short route to a low-win-rate opponent may be worse than a longer route to a fast reliable one. Keep unavailable duties, currencies, achievements, and event sources visible in the collection plan without pretending that the Triple Triad match controller can complete them.</p>
+<h2 id="validation-and-implementation-sequence">Validation and implementation sequence</h2>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Deliverable</th>
+<th>Completion condition</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1. Data and core</td>
+<td>Versioned catalogue, standard legality, independent simulation</td>
+<td>Cross-source validation and deterministic rule fixtures pass</td>
+</tr>
+<tr>
+<td>2. Observer</td>
+<td>Read preparation, board, result, ownership</td>
+<td>Recorded transitions agree with manual observations</td>
+</tr>
+<tr>
+<td>3. Adviser</td>
+<td>Legal move recommendation with deadlines</td>
+<td>No illegal suggestions; measurable performance against baselines</td>
+</tr>
+<tr>
+<td>4. Local match automation</td>
+<td>One NPC, challenge to verified result</td>
+<td>Bounded retries; stale moves rejected; emergency stop works</td>
+</tr>
+<tr>
+<td>5. Farming</td>
+<td>Rematches, registration, stop conditions</td>
+<td>Reward journal and ownership reconcile without double counting</td>
+</tr>
+<tr>
+<td>6. Deck optimization</td>
+<td>Cache and per-opponent candidates</td>
+<td>Beats or matches legal seed decks on held-out scenarios</td>
+</tr>
+<tr>
+<td>7. Collection routing</td>
+<td>Multi-NPC plan with travel IPC</td>
+<td>Unlock, travel failure, pause/resume, and zone transitions recover</td>
+</tr>
+<tr>
+<td>8. Additional modes</td>
+<td>Draft/tournament controller if desired</td>
+<td>Separate rule, draft, scoring, and lifecycle coverage</td>
+</tr>
+</tbody>
+</table></div>
+<p>The critical test corpus should cover:</p>
+<ul>
+<li>Ordinary captures, equal edges, boundaries, empty-cell rejection, and the tenth-card score.</li>
+<li>Same/Plus with a friendly participant, multiple matching groups, simultaneous normal captures, and multi-step Combo.</li>
+<li>Reverse × Fallen Ace, type shifts at both limits, and special capture interactions with type changes.</li>
+<li>Order and Chaos, including a changed forced slot while a solver is running.</li>
+<li>Random hand replacement, Swap with duplicate identities, and partial visibility after transformation.</li>
+<li>Sudden Death through the full official limit, ownership-based redistribution, leftover card handling, and repeated-round state reset.</li>
+<li>NPC fixed/variable pool accounting without impossible sixth-card hypotheses.</li>
+<li>Unreadable UI, callback rejection, frame-rate changes, automatic timer moves, reconnect, and character/territory changes.</li>
+<li>Full inventory, delayed registration, repeated reward observations, and stop-after-target acquisition.</li>
+</ul>
+<p>Use fixed seeds for reproducibility and disjoint evaluation seeds for comparisons. Record win/draw/loss separately, with sample sizes and confidence intervals. Report live move latency percentiles, illegal-action count, parser disagreement count, fallback rate, repeated-action count, and reward reconciliation failures. Do not collapse all of these into a single “accuracy” value.</p>
+<p><strong>Suggested acceptance priorities:</strong> zero known illegal actions in the fixture corpus; no callback submitted from a stale snapshot; no unbounded retries; no silent unknown-rule handling; and verified ownership before a collection goal is marked complete. Numerical win-rate and throughput targets should be set after baseline measurements, rather than invented in advance.</p>
+<p>For independent verification, compare simulated transitions with recorded client observations. Comparing only Saucy, TriadBuddy, and AutoTripleTriadGrind is insufficient because their implementation lineage overlaps.</p>
+<h2 id="what-is-established-and-what-remains-open">What is established, and what remains open</h2>
+<p>Established in this research: the public data snapshot, card-stat agreement, source architecture and licensing declarations, 18 passing upstream offline tests, the reproduced Sudden Death cap, and the counterexample to the score ranking. No public-repository popularity metric was used as proof of correctness.</p>
+<p>Still requiring client evidence: callback behavior on the installed build, all rule-combination event ordering, late Sudden Death behavior, current NPC reachability/unlocks, hidden-card inference fidelity, NPC action probabilities, actual target drop rates, end-to-end navigation reliability, and comparative live win rate.</p>
+<p><strong>Best implementation path:</strong> adopt the closest complete workflow if its licensing and integration choices fit; otherwise retain the permissive engine/data foundations and implement a small, explicit controller around them. In either path, first separate simulation rules from search approximations, replace the inherited scoring discontinuity, and require fresh acknowledged state for every action. Those changes address demonstrated weaknesses before adding more automation scope.</p>
+<h2 id="source-links">Source links</h2>
+<p>Inline citations link directly to the relevant documentation or pinned source file. The <a href="data/source-manifest.json">API source manifest</a> and <a href="data/repository-manifest.json">repository manifest</a> provide the complete downloaded-resource inventory. Useful entry points for further work are the <a href="https://na.finalfantasyxiv.com/lodestone/playguide/contentsguide/goldsaucer/tripletriad/">official rules</a>, <a href="https://ffxivcollect.com/api/triad/cards">FFXIV Collect card data</a>, <a href="https://v2.xivapi.com/docs/guides/sheets/">XIVAPI sheet documentation</a>, <a href="https://github.com/PunishXIV/Saucy/tree/53971e8b75f2f522e2f2201a1ebb55f9e9d4cc28/Saucy/TripleTriad">Saucy Triple Triad implementation</a>, and <a href="https://github.com/XeldarAlz/FFXIV-AutoTripleTriadGrind/blob/71da7486806c04aa00c7539cc68fad1f51d0add3/README.md">AutoTripleTriadGrind overview</a>.</p></main></body></html>

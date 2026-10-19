@@ -1,0 +1,11 @@
+bin/
+obj/
+*.user
+.vs/
+
+# Research inputs that are large or third-party: pinned checkouts and the local Markdown tooling.
+research/sources/
+research/.tools/
+
+# Claude Code agent worktrees
+.claude/worktrees/

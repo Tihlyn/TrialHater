@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Pure game logic: no Dalamud or game-memory dependency, so tests and offline tools run anywhere. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <!-- The search loop is the product: an unoptimised Debug build made the opening 4x slower in game. -->
+    <Optimize>true</Optimize>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="TrialHater.Tests" />
+  </ItemGroup>
+</Project>

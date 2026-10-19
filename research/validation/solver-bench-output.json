@@ -1,0 +1,228 @@
+﻿{
+  "note": "Full-information benchmark. Upstream AutoTripleTriadGrind logic compiled unmodified; independent exact engine differential-tested against it.",
+  "machine": {
+    "ProcessorCount": 16,
+    "os": "Microsoft Windows NT 10.0.26300.0",
+    "runtime": "10.0.2"
+  },
+  "results": {
+    "differential": {
+      "Plain": {
+        "games": 20000,
+        "moves": 180000,
+        "ownershipMismatchGames": 0,
+        "outcomeMismatchGames": 0
+      },
+      "Same": {
+        "games": 20000,
+        "moves": 180000,
+        "ownershipMismatchGames": 0,
+        "outcomeMismatchGames": 0
+      },
+      "Plus": {
+        "games": 20000,
+        "moves": 180000,
+        "ownershipMismatchGames": 0,
+        "outcomeMismatchGames": 0
+      },
+      "Same\u002BPlus": {
+        "games": 20000,
+        "moves": 180000,
+        "ownershipMismatchGames": 0,
+        "outcomeMismatchGames": 0
+      }
+    },
+    "exactSolveCost": {
+      "Plain": {
+        "decks": 60,
+        "openingBestMoveMs": {
+          "n": 60,
+          "median": 323.4,
+          "p90": 637.21,
+          "max": 890.4,
+          "mean": 327.62
+        },
+        "openingAll45MovesMs": {
+          "n": 60,
+          "median": 1582.62,
+          "p90": 2120.64,
+          "max": 2944.35,
+          "mean": 1565.31
+        },
+        "secondPlayerFirstMoveMs": {
+          "n": 60,
+          "median": 44.84,
+          "p90": 87.72,
+          "max": 126.04,
+          "mean": 47.47
+        },
+        "openingNodesMedian": 2326720,
+        "firstPlayerPerfectPlay": {
+          "loss": 1,
+          "draw": 58,
+          "win": 1
+        }
+      },
+      "Same": {
+        "decks": 60,
+        "openingBestMoveMs": {
+          "n": 60,
+          "median": 383.1,
+          "p90": 702.2,
+          "max": 968.92,
+          "mean": 410.12
+        },
+        "openingAll45MovesMs": {
+          "n": 60,
+          "median": 1871.64,
+          "p90": 2446.6,
+          "max": 2776.29,
+          "mean": 1852.37
+        },
+        "secondPlayerFirstMoveMs": {
+          "n": 60,
+          "median": 62.09,
+          "p90": 93.27,
+          "max": 152.82,
+          "mean": 60.17
+        },
+        "openingNodesMedian": 2366845,
+        "firstPlayerPerfectPlay": {
+          "loss": 1,
+          "draw": 58,
+          "win": 1
+        }
+      },
+      "Plus": {
+        "decks": 60,
+        "openingBestMoveMs": {
+          "n": 60,
+          "median": 326.26,
+          "p90": 615.85,
+          "max": 867.26,
+          "mean": 346.18
+        },
+        "openingAll45MovesMs": {
+          "n": 60,
+          "median": 2198.76,
+          "p90": 2909.62,
+          "max": 3455.88,
+          "mean": 2232.35
+        },
+        "secondPlayerFirstMoveMs": {
+          "n": 60,
+          "median": 57.73,
+          "p90": 90.14,
+          "max": 124.93,
+          "mean": 60.64
+        },
+        "openingNodesMedian": 1916971,
+        "firstPlayerPerfectPlay": {
+          "loss": 0,
+          "draw": 60,
+          "win": 0
+        }
+      },
+      "Same\u002BPlus": {
+        "decks": 60,
+        "openingBestMoveMs": {
+          "n": 60,
+          "median": 358.63,
+          "p90": 624.98,
+          "max": 967.37,
+          "mean": 373.22
+        },
+        "openingAll45MovesMs": {
+          "n": 60,
+          "median": 2447.49,
+          "p90": 3142.75,
+          "max": 3978.76,
+          "mean": 2396.87
+        },
+        "secondPlayerFirstMoveMs": {
+          "n": 60,
+          "median": 68.31,
+          "p90": 119,
+          "max": 149.33,
+          "mean": 69.52
+        },
+        "openingNodesMedian": 2067895,
+        "firstPlayerPerfectPlay": {
+          "loss": 0,
+          "draw": 60,
+          "win": 0
+        }
+      }
+    },
+    "upstreamAgentRegret": {
+      "Plain": {
+        "games": 100,
+        "attgDecisionsScored": 450,
+        "attgSuboptimalDecisions": 31,
+        "attgThrewWinningPosition": 2,
+        "attgThrewDrawnPosition": 29,
+        "attgMoveMs": {
+          "n": 900,
+          "median": 1.38,
+          "p90": 49.1,
+          "max": 114.84,
+          "mean": 16.6
+        },
+        "blueAttgVsPerfectRed": {
+          "loss": 32,
+          "draw": 67,
+          "win": 1
+        },
+        "blueExactVsPerfectRed": {
+          "loss": 3,
+          "draw": 94,
+          "win": 3
+        },
+        "blueAttgVsGreedyRed": {
+          "loss": 10,
+          "draw": 13,
+          "win": 77
+        },
+        "blueExactVsGreedyRed": {
+          "loss": 0,
+          "draw": 41,
+          "win": 59
+        }
+      },
+      "Same\u002BPlus": {
+        "games": 100,
+        "attgDecisionsScored": 450,
+        "attgSuboptimalDecisions": 52,
+        "attgThrewWinningPosition": 2,
+        "attgThrewDrawnPosition": 50,
+        "attgMoveMs": {
+          "n": 900,
+          "median": 2.39,
+          "p90": 64.88,
+          "max": 92.39,
+          "mean": 22.28
+        },
+        "blueAttgVsPerfectRed": {
+          "loss": 50,
+          "draw": 50,
+          "win": 0
+        },
+        "blueExactVsPerfectRed": {
+          "loss": 0,
+          "draw": 98,
+          "win": 2
+        },
+        "blueAttgVsGreedyRed": {
+          "loss": 10,
+          "draw": 12,
+          "win": 78
+        },
+        "blueExactVsGreedyRed": {
+          "loss": 0,
+          "draw": 21,
+          "win": 79
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,107 @@
+[
+  {
+    "name": "Tutorial",
+    "card_ids": [
+      1,
+      3,
+      6,
+      7,
+      10
+    ],
+    "cards": [
+      "Dodo",
+      "Sabotender",
+      "Bomb",
+      "Mandragora",
+      "Coeurl"
+    ],
+    "legal_rarity_and_unique_ids": true,
+    "ownership_required": true,
+    "benchmark_status": "not benchmarked",
+    "notes": "Starter cards; baseline only."
+  },
+  {
+    "name": "Normal corners",
+    "card_ids": [
+      75,
+      118,
+      88,
+      89,
+      91
+    ],
+    "cards": [
+      "Squall Leonhart",
+      "Senor Sabotender",
+      "Estinien",
+      "Lucia goe Junius",
+      "Hilda"
+    ],
+    "legal_rarity_and_unique_ids": true,
+    "ownership_required": true,
+    "benchmark_status": "not benchmarked",
+    "notes": "Three distinct double-eight orientations, a flexible four-star, and Squall. Seed for optimization, not a universal optimum."
+  },
+  {
+    "name": "Ascension primals",
+    "card_ids": [
+      40,
+      41,
+      42,
+      53,
+      55
+    ],
+    "cards": [
+      "Ifrit",
+      "Titan",
+      "Garuda",
+      "Ramuh",
+      "Shiva"
+    ],
+    "legal_rarity_and_unique_ids": true,
+    "ownership_required": true,
+    "benchmark_status": "not benchmarked",
+    "notes": "Five Primals; two four-stars and three three-stars. Re-evaluate against opposing Primals and Reverse."
+  },
+  {
+    "name": "Ascension scions",
+    "card_ids": [
+      46,
+      49,
+      50,
+      165,
+      166
+    ],
+    "cards": [
+      "Thancred",
+      "Y'shtola",
+      "Urianger",
+      "Heavensward Thancred",
+      "Heavensward Y'shtola"
+    ],
+    "legal_rarity_and_unique_ids": true,
+    "ownership_required": true,
+    "benchmark_status": "not benchmarked",
+    "notes": "Five Scions with two four-stars. Seed only."
+  },
+  {
+    "name": "Reverse budget",
+    "card_ids": [
+      2,
+      4,
+      6,
+      7,
+      81
+    ],
+    "cards": [
+      "Tonberry",
+      "Spriggan",
+      "Bomb",
+      "Mandragora",
+      "Gaelicat"
+    ],
+    "legal_rarity_and_unique_ids": true,
+    "ownership_required": true,
+    "benchmark_status": "not benchmarked",
+    "notes": "Low-value cards; avoid exposed high sides. Seed only, not benchmarked."
+  }
+]

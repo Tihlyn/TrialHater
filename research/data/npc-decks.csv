@@ -1,0 +1,145 @@
+﻿triple_triad_id,name,fee_mgp,fixed_card_ids,variable_pool_ids,fixed_cards,variable_pool,rule_ids
+2293762,Memeroon,10,37;14;1,21;2;7;12,Memeroon | Amalj'aa | Dodo,Siren | Tonberry | Mandragora | Goobbue,2
+2293763,Jonas of the Three Spades,10,23;3;4,26;11;15;20,Demon Wall | Sabotender | Spriggan,Blue Dragon | Ahriman | Ixal | Moogle,2;4
+2293764,Maisenta,10,36;7;10,24;16;8,Mutamix Bubblypots | Mandragora | Coeurl,Succubus | Sylph | Coblyn,2
+2293765,Roger,10,26;9;13,25;15;5;6,Blue Dragon | Morbol | Chocobo,Chimera | Ixal | Pudding | Bomb,2
+2293766,Guhtwint of the Three Diamonds,15,38;26;6,27;13;11;8,Behemoth | Blue Dragon | Bomb,Scarface Bugaal Ja | Chocobo | Ahriman | Coblyn,3;6
+2293767,Mother Miounne,15,30;29;15,35;28;11;12;5,Mother Miounne | Baderon Tenfingers | Ixal,Frixio | Momodi Modi | Ahriman | Goobbue | Pudding,3
+2293768,Wymond,15,22;28;13,26;4;7;8,Ultros & Typhon | Momodi Modi | Chocobo,Blue Dragon | Spriggan | Mandragora | Coblyn,3
+2293769,Momodi,15,28;30;14,36;29;13;10;8,Momodi Modi | Mother Miounne | Amalj'aa,Mutamix Bubblypots | Baderon Tenfingers | Chocobo | Coeurl | Coblyn,3
+2293770,F'hobhas,15,45;36;14,23;13;18;5;6,Godbert Manderville | Mutamix Bubblypots | Amalj'aa,Demon Wall | Chocobo | Sahagin | Pudding | Bomb,3
+2293771,Triple Triad Master,5,13;7;2;5;4,,Chocobo | Mandragora | Tonberry | Pudding | Spriggan,,2
+2293772,Joellaut,20,38;33;2,59;26;14;12;15,Behemoth | Biggs & Wedge | Tonberry,Alphinaud & Alisaie | Blue Dragon | Amalj'aa | Goobbue | Ixal,3
+2293773,Aurifort of the Three Clubs,20,51;24;37,27;20;16;12,Ultima Weapon | Succubus | Memeroon,Scarface Bugaal Ja | Moogle | Sylph | Goobbue,3;8
+2293774,Piralnaut,20,56;24;35,44;30;10;18;14,Minfilia | Succubus | Frixio,Raya-O-Senna & A-Ruhn-Senna | Mother Miounne | Coeurl | Sahagin | Amalj'aa,3
+2293775,Trachtoum,20,41;34;2,49;26;22;20,Titan | Gerolt | Tonberry,Y'shtola | Blue Dragon | Ultros & Typhon | Moogle,3
+2293776,Mimidoa,20,54;33;19,37;25;15;13;20,Leviathan | Biggs & Wedge | Tataru Taru,Memeroon | Chimera | Ixal | Chocobo | Moogle,3
+2293777,Baderon,20,28;29;30,49;21;27;18;17,Momodi Modi | Baderon Tenfingers | Mother Miounne,Y'shtola | Siren | Scarface Bugaal Ja | Sahagin | Kobold,3
+2293778,Fufulupa,20,33;28;2,67;46;19;20;13,Biggs & Wedge | Momodi Modi | Tonberry,Raubahn Aldynn | Thancred | Tataru Taru | Moogle | Chocobo,3
+2293779,Helmhart,20,45;34;11,60;41;22;27;2,Godbert Manderville | Gerolt | Ahriman,Louisoix Leveilleur | Titan | Ultros & Typhon | Scarface Bugaal Ja | Tonberry,3
+2293780,Ourdilic,25,55;51;50,44;38;26;33,Shiva | Ultima Weapon | Urianger,Raya-O-Senna & A-Ruhn-Senna | Behemoth | Blue Dragon | Biggs & Wedge,8
+2293781,Ruhtwyda of the Three Hearts,25,59;56;47,57;58;43;50;45,Alphinaud & Alisaie | Minfilia | Nero tol Scaeva,Lahabrea | Cid Garlond | Good King Moggle Mog XII | Urianger | Godbert Manderville,12;5
+2293782,Marcette,25,52;53;57,44;47;42;38;35,Odin | Ramuh | Lahabrea,Raya-O-Senna & A-Ruhn-Senna | Nero tol Scaeva | Garuda | Behemoth | Frixio,9
+2293783,Buscarron,25,66;52;43,48;42;39;44,Kan-E-Senna | Odin | Good King Moggle Mog XII,Papalymo & Yda | Garuda | Gilgamesh & Enkidu | Raya-O-Senna & A-Ruhn-Senna,8
+2293784,Sezul Totoloc,25,58;51;33,45;38;47,Cid Garlond | Ultima Weapon | Biggs & Wedge,Godbert Manderville | Behemoth | Nero tol Scaeva,4;6
+2293785,Landenel,25,52;41;66,40;32;13,Odin | Titan | Kan-E-Senna,Ifrit | Rhitahtyn sas Arvina | Chocobo,11;9
+2293786,King Elmer III,30,61;50;45,62;41;39;49,Bahamut | Urianger | Godbert Manderville,Hildibrand & Nashu Mhakaracca | Titan | Gilgamesh & Enkidu | Y'shtola,6
+2293787,Vorsaile Heuloix,30,66;56;53,63;58;48;43,Kan-E-Senna | Minfilia | Ramuh,Nanamo Ul Namo | Cid Garlond | Papalymo & Yda | Good King Moggle Mog XII,12
+2293788,Swift,30,67;28;22,59;46;40;33;19,Raubahn Aldynn | Momodi Modi | Ultros & Typhon,Alphinaud & Alisaie | Thancred | Ifrit | Biggs & Wedge | Tataru Taru,9
+2293789,Hab,30,62;45,67;52;46;34;3,Hildibrand & Nashu Mhakaracca | Godbert Manderville,Raubahn Aldynn | Odin | Thancred | Gerolt | Sabotender,13
+2293790,Indolent Imperial,30,64;61;47,42;31;32;37;27,Gaius van Baelsar | Bahamut | Nero tol Scaeva,Garuda | Livia sas Junius | Rhitahtyn sas Arvina | Memeroon | Scarface Bugaal Ja,12
+2293791,Rowena,30,34;61,29;60;47;39;45,Gerolt | Bahamut,Baderon Tenfingers | Louisoix Leveilleur | Nero tol Scaeva | Gilgamesh & Enkidu | Godbert Manderville,1;1
+2293792,Gegeruju,30,63;56;49,65;66;55;31;30,Nanamo Ul Namo | Minfilia | Y'shtola,Merlwyb Bloefhiswyn | Kan-E-Senna | Shiva | Livia sas Junius | Mother Miounne,14;5
+2293793,R'ashaht Rhiki,30,65;54;41,58;50;49;38,Merlwyb Bloefhiswyn | Leviathan | Titan,Cid Garlond | Urianger | Y'shtola | Behemoth,4;6
+2293794,UNMAPPED,35,50;19;80,49;33;48;46;62,Urianger | Tataru Taru | Lightning,Y'shtola | Biggs & Wedge | Papalymo & Yda | Thancred | Hildibrand & Nashu Mhakaracca,7;1
+2293795,Noes,25,52;42,81;36;43;30;35,Odin | Garuda,Gaelicat | Mutamix Bubblypots | Good King Moggle Mog XII | Mother Miounne | Frixio,13;6
+2293796,Yellow Moon,25,64;81,84;34;32;77;55,Gaius van Baelsar | Gaelicat,Yugiri Mistwalker | Gerolt | Rhitahtyn sas Arvina | Tidus | Shiva,12;14
+2293797,Wawalago,25,63;49,89;48;42;73;28,Nanamo Ul Namo | Y'shtola,Lucia goe Junius | Papalymo & Yda | Garuda | Terra Branford | Momodi Modi,14;9
+2293798,Yayake,30,61;55,96;22;40;46;81,Bahamut | Shiva,Aymeric | Ultros & Typhon | Ifrit | Thancred | Gaelicat,9;1
+2293799,Gibrillont,25,89;56,88;62;50;58;19,Lucia goe Junius | Minfilia,Estinien | Hildibrand & Nashu Mhakaracca | Urianger | Cid Garlond | Tataru Taru,1
+2293800,Marcechamp,30,14;81,90;3;55;43;84,Amalj'aa | Gaelicat,Ysayle | Sabotender | Shiva | Good King Moggle Mog XII | Yugiri Mistwalker,10;6
+2293801,Marielle,30,63;86;65;93;96,,Nanamo Ul Namo | Griffin | Merlwyb Bloefhiswyn | Count Edmont de Fortemps | Aymeric,,8
+2293802,Midnight Dew,30,88;100,92;97;86;99;49,Estinien | Midgardsormr,Matoya | Ravana | Griffin | Nidhogg | Y'shtola,1;1
+2293803,Idle Imperial,30,83;97,47;40;91;32;92,Gnath | Ravana,Nero tol Scaeva | Ifrit | Hilda | Rhitahtyn sas Arvina | Matoya,14;9
+2293804,Mogmill,30,66;98,82;83;97;100;43,Kan-E-Senna | Bismarck,Vanu Vanu | Gnath | Ravana | Midgardsormr | Good King Moggle Mog XII,1;1
+2293805,UNMAPPED,35,96;19;80,88;93;90;91;69,Aymeric | Tataru Taru | Lightning,Estinien | Count Edmont de Fortemps | Ysayle | Hilda | Firion,7;9
+2293806,Elaisse,25,102,91;65;66;63;67,Archaeornis,Hilda | Merlwyb Bloefhiswyn | Kan-E-Senna | Nanamo Ul Namo | Raubahn Aldynn,9;6
+2293807,Dominiac,30,101;96,89;88;86;38;93,Deepeye | Aymeric,Lucia goe Junius | Estinien | Griffin | Behemoth | Count Edmont de Fortemps,8
+2293808,Laniaitte,30,103;98,104;93;58;89;96,Paissa | Bismarck,Dhalmel | Count Edmont de Fortemps | Cid Garlond | Lucia goe Junius | Aymeric,4;6
+2293809,Voracious Vath,30,105;97,90;88;59;55;109,Bandersnatch | Ravana,Ysayle | Estinien | Alphinaud & Alisaie | Shiva | Coeurlregina,12;14
+2293810,Seika,35,107;106,117;18;15;14;17,Poroggo | Crawler,Roundrox | Sahagin | Ixal | Amalj'aa | Kobold,10;9
+2293811,Lewena,40,73;70,74;52;42;40;41,Terra Branford | Onion Knight,Cloud Strife | Odin | Garuda | Ifrit | Titan,11;9
+2293812,Linu Vali,25,98;82,123;103;81;86;104,Bismarck | Vanu Vanu,Brachiosaur | Paissa | Gaelicat | Griffin | Dhalmel,10;9
+2293813,Vath Deftarm,25,97;83,109;105;90;59;88,Ravana | Gnath,Coeurlregina | Bandersnatch | Ysayle | Alphinaud & Alisaie | Estinien,1
+2293814,Klynthota,30,140;135;132,58;33;47,Cloud of Darkness | Xande | Phlegethon,Cid Garlond | Biggs & Wedge | Nero tol Scaeva,4;6
+2293815,Tapklix,30,136;117,107;106;49;59,Brute Justice | Roundrox,Poroggo | Crawler | Y'shtola | Alphinaud & Alisaie,14;4
+2293816,House Fortemps Manservant,25,121;133;134;95;93,,Honoroit | Artoirel de Fortemps | Emmanellain de Fortemps | Haurchefant | Count Edmont de Fortemps,,3;6
+2293817,Master Mogzin,30,153;43,90;99;108;124;20,Hraesvelgr | Good King Moggle Mog XII,Ysayle | Nidhogg | Vedrfolnir | Darkscale | Moogle,4;6
+2293818,O'kalkaya,20,149;144,29;65;54;49;12,Mistbeard | Rhoswen,Baderon Tenfingers | Merlwyb Bloefhiswyn | Leviathan | Y'shtola | Goobbue,1;6
+2293819,Mordyn,20,149;145,29;65;54;126;7,Mistbeard | Carvallain de Gorgagne,Baderon Tenfingers | Merlwyb Bloefhiswyn | Leviathan | Kraken | Mandragora,14;4
+2293820,Wyra “Greenhands” Lyehga,10,35;11;154,30;5;9;13,Frixio | Ahriman | Apkallu,Mother Miounne | Pudding | Morbol | Chocobo,2;4
+2293821,Prideful Stag,15,45;158;26,28;82;8;13,Godbert Manderville | Lost Lamb | Blue Dragon,Momodi Modi | Vanu Vanu | Coblyn | Chocobo,6
+2293822,Nell Half-full,15,54;164;110,50;145;103;29,"Leviathan | Brendt, Brennan, & Bremondt | Progenitrix",Urianger | Carvallain de Gorgagne | Paissa | Baderon Tenfingers,4;6
+2293823,Flichoirel the Lordling,25,167;139,94;38;86;95;45,Nael van Darnus | Vidofnir,Byblos | Behemoth | Griffin | Haurchefant | Godbert Manderville,
+2293824,Hall Overseer,30,73;120;59,65;58;95,Terra Branford | Archbishop Thordan VII | Alphinaud & Alisaie,Merlwyb Bloefhiswyn | Cid Garlond | Haurchefant,11;9
+2293825,Ercanbald,15,48;186;170,34;14;5,Papalymo & Yda | M'naago | Adamantoise,Gerolt | Amalj'aa | Pudding,
+2293826,Kotokaze,15,87;187;2,28;29;30,Tioman | Kotokaze | Tonberry,Momodi Modi | Baderon Tenfingers | Mother Miounne,4
+2293827,Kaizan,20,193;91;25,149;23;121;94,Rasho | Hilda | Chimera,Mistbeard | Demon Wall | Honoroit | Byblos,14;13
+2293828,Tsuzura,20,89;184;38,54;21;18;155,Lucia goe Junius | Kojin | Behemoth,Leviathan | Siren | Sahagin | Colibri,9;1
+2293829,Gyoei,15,92;141;183,169;17;5;248,Matoya | Lolorito Nanarito | Namazu,Opo-opo | Kobold | Pudding | Great Gold Whisker,10;6
+2293830,Nigen,25,56;98;194,125;161;45,Minfilia | Bismarck | Cirina,Fenrir | Strix | Godbert Manderville,4;6
+2293831,Ogodei,25,57;179;195,117;110;147,Lahabrea | Diabolos Hollow | Magnai,Roundrox | Progenitrix | Waukkeon,11;6
+2293832,Munglig,25,53;58;196,42;89;93,Ramuh | Cid Garlond | Sadu,Garuda | Lucia goe Junius | Count Edmont de Fortemps,4;9
+2293833,Kiuka,30,202;153;59,56;92;84,Hien | Hraesvelgr | Alphinaud & Alisaie,Minfilia | Matoya | Yugiri Mistwalker,9
+2293834,Garima,20,138;185;48,108;145;19;205,F'lhaminn | Ananta | Papalymo & Yda,Vedrfolnir | Carvallain de Gorgagne | Tataru Taru | Qiqirn Meateater,6;12
+2293835,Imperial Deserter,30,66;167;198,180;88;48;207,Kan-E-Senna | Nael van Darnus | Yotsuyu,Armored Weapon | Estinien | Papalymo & Yda | Fordola rem Lupis,11
+2293836,Masatsuchi,25,218;136;97,211;115;123,Lupin | Brute Justice | Ravana,Koja | Moglin | Brachiosaur,4
+2293837,Isobe,30,220;60;62,212;140;167;151;152,Hisui & Kurenai | Louisoix Leveilleur | Hildibrand & Nashu Mhakaracca,Ango | Cloud of Darkness | Nael van Darnus | Tiamat | Calofisteri,6;14
+2293838,Yusui,15,214;193;108,37;32;122,Tansui | Rasho | Vedrfolnir,Memeroon | Rhitahtyn sas Arvina | Hoary Boulder & Coultenet,6
+2293839,Kikimo,30,219;139;64,58;129;113;163,Hancock | Vidofnir | Gaius van Baelsar,Cid Garlond | Ferdiad | Pipin Tarupin | Alexander Prime,14;11
+2293840,Umber Torrent,25,217;96;137,109;162;174,Arenvald Lentinus | Aymeric | Sephirot,Coeurlregina | Tozol Huatotl | Lava Scorpion,4;6
+2293841,Hokushin,20,231;239;211,183;187;62;184,Karakuri Hanya | Yojimbo & Daigoro | Koja,Namazu | Kotokaze | Hildibrand & Nashu Mhakaracca | Kojin,6;14
+2293842,Hachinan,30,238;192;180;176,175;198;201;156;171,Asahi sas Brutus | Grynewaht | Armored Weapon | Magitek Sky Armor,Magitek Predator | Yotsuyu | Zenos yae Galvus | Magitek Death Claw | Magitek Vanguard,12;11
+2293843,Botan,25,227;236;199,226;223;34,Louhi | Pazuzu | Krile,Happy Bunny | Yukinko | Gerolt,6;1
+2293844,Redbill Storeboy,25,112;152;179,129;115;82;103;81,Echidna | Calofisteri | Diabolos Hollow,Ferdiad | Moglin | Vanu Vanu | Paissa | Gaelicat,9
+2293845,Mero Roggo,30,251;94;161;130,92;107;106;111;233,Stormblood Alphinaud & Alisaie | Byblos | Strix | Calcabrina,Matoya | Poroggo | Crawler | Belladonna | Tokkapchi,6;1
+2293846,Ushiogi,15,221;222;225,212;184;214;193,Wanyudo & Katasharin | Hatamoto | Hiruko,Ango | Kojin | Tansui | Rasho,14;8
+2293847,Ironworks Hand,35,247;197;240,13;85;33;58;100,Alpha | Shinryu | Omega,Chocobo | Fat Chocobo | Biggs & Wedge | Cid Garlond | Midgardsormr,1;1
+2293848,Hetsukaze,30,243;237;242;245,226;236;227;223,Ejika Tsunjika | Penthesilea | Dvergr | Provenance Watcher,Happy Bunny | Pazuzu | Louhi | Yukinko,6;4
+2293849,Glynard,15,253;25;170,8;265;155;1,Amaro | Chimera | Adamantoise,Coblyn | Lyna | Colibri | Dodo,3
+2293850,Gyuf Uin,25,257;111;261;103,155;7;253,Feo Ul | Belladonna | Titania | Paissa,Colibri | Mandragora | Amaro,3;14
+2293851,Hargra,30,258;268,10;262;170;105;38,Runar | Shadowbringers Y'shtola,Coeurl | Eros | Adamantoise | Bandersnatch | Behemoth,4;1
+2293852,Drery,20,254;256;189,7;38;8;170,Evil Weapon | Gigantender | Phoebad,Mandragora | Behemoth | Coblyn | Adamantoise,6;4
+2293853,Ibenart,15,255;264;38,12;7;256;21,Lord and Lady Chai | Formidable | Behemoth,Goobbue | Mandragora | Gigantender | Siren,3;11
+2293854,Lamlyn,25,265,38;260;170;110;25,Lyna,Behemoth | Philia | Adamantoise | Progenitrix | Chimera,9
+2293855,Saushs Koal,15,259;253;254,255;265;8;155;258,Grenoldt | Amaro | Evil Weapon,Lord and Lady Chai | Lyna | Coblyn | Colibri | Runar,2
+2293856,Grewenn,35,266;270,260;262;263;38;267,Jongleurs of Eulmore | Ran'jit,Philia | Eros | Storge | Behemoth | Innocence,6;14
+2293857,Eo Sigun,25,274;276,257;111;261;103;38,Porxie | Nu Mou,Feo Ul | Belladonna | Titania | Paissa | Behemoth,6
+2293858,Redard,25,284;287;275,109;262;86,Qitari | Batsquatch | Iguana,Coeurlregina | Eros | Griffin,4;10
+2293859,Hanagasa,40,209;208;20;226,250;229;58,Argath Thadalfus | Rofocale | Moogle | Happy Bunny,"Ultima, the High Seraph | Yiazmat | Cid Garlond",6;13
+2293860,Cobleva,25,296;294;264,278;253;260;265;285,Rolling Tankard | Dwarf | Formidable,Leannan Sith | Amaro | Philia | Lyna | Gnoll,6;10
+2293861,Furtive Former Imperial,40,302;244;180;175,291;176;238;192;51,Sapphire Weapon | Prometheus | Armored Weapon | Magitek Predator,Ruby Weapon | Magitek Sky Armor | Asahi sas Brutus | Grynewaht | Ultima Weapon,14;11
+2293862,Arsieu,35,298;299;208;180,250;229;209,Dawon | Adrammelech | Rofocale | Armored Weapon,"Ultima, the High Seraph | Yiazmat | Argath Thadalfus",6;12
+2293863,UNMAPPED,0,66;53;44,48;164;42;129;43,Kan-E-Senna | Ramuh | Raya-O-Senna & A-Ruhn-Senna,"Papalymo & Yda | Brendt, Brennan, & Bremondt | Garuda | Ferdiad | Good King Moggle Mog XII",
+2293864,UNMAPPED,0,63;118;38,40;113;127;178;45,Nanamo Ul Namo | Senor Sabotender | Behemoth,Ifrit | Pipin Tarupin | Vicegerent to the Warden | Roland | Godbert Manderville,
+2293865,UNMAPPED,0,65;91;110;149,54;55;56;57;58,Merlwyb Bloefhiswyn | Hilda | Progenitrix | Mistbeard,Leviathan | Shiva | Minfilia | Lahabrea | Cid Garlond,
+2293866,UNMAPPED,0,119;96;89,94;38;86;95;45,Regula van Hydrus | Aymeric | Lucia goe Junius,Byblos | Behemoth | Griffin | Haurchefant | Godbert Manderville,
+2293867,UNMAPPED,0,64;92;175;162,51;60;59;150;181,Gaius van Baelsar | Matoya | Magitek Predator | Tozol Huatotl,Ultima Weapon | Louisoix Leveilleur | Alphinaud & Alisaie | Unei & Doga | Gigi,
+2293868,UNMAPPED,0,62;138;47,43;50;45;38;49,Hildibrand & Nashu Mhakaracca | F'lhaminn | Nero tol Scaeva,Good King Moggle Mog XII | Urianger | Godbert Manderville | Behemoth | Y'shtola,
+2293869,UNMAPPED,0,67;52;127,38;132;162;115;86,Raubahn Aldynn | Odin | Vicegerent to the Warden,Behemoth | Phlegethon | Tozol Huatotl | Moglin | Griffin,
+2293870,UNMAPPED,0,61;167;90,128;125;132;164;38,Bahamut | Nael van Darnus | Ysayle,"Manxome Molaa Ja Ja | Fenrir | Phlegethon | Brendt, Brennan, & Bremondt | Behemoth",
+2293871,Droyn,15,309;310;136;39,305;9;22;25,Azulmagia | Siegfried | Brute Justice | Gilgamesh & Enkidu,Great Azuro | Morbol | Ultros & Typhon | Chimera,4;13
+2293872,Lewto-Sue,25,313;314;263;288,301;270;254;256,Ryne | Gaia | Storge | Forgiven Obscenity,Shadowbringers Thancred | Ran'jit | Evil Weapon | Gigantender,6;11
+2293873,Sladkey,35,321;325;208;322,250;229;209;299,4th-make Shemhazai | Diablo Armament | Rofocale | 4th-make Cuchulainn,"Ultima, the High Seraph | Yiazmat | Argath Thadalfus | Adrammelech",4;14
+2293874,Aiglephine,15,327;234,233;169;111;130,Troll | Mist Dragon,Tokkapchi | Opo-opo | Belladonna | Calcabrina,3
+2293875,Qetanur,15,328;1,188;232;104;45;102,Pisaca | Dodo,Mammoth | Muud Suud | Dhalmel | Godbert Manderville | Archaeornis,4
+2293876,Worldly Imperial,35,340;293,238;244;180;176;175,Quintus van Cinna | Varis yae Galvus,Asahi sas Brutus | Prometheus | Armored Weapon | Magitek Sky Armor | Magitek Predator,1
+2293877,Mehryde,20,330;336,224;191;185;170;328,Arkasodara | Magus Sisters,Qitian Dasheng | Lakshmi | Ananta | Adamantoise | Pisaca,6
+2293878,Cheatingway,35,331;332,130;94;46;269;268,Loporrit | Argos,Calcabrina | Byblos | Thancred | Shadowbringers Urianger | Shadowbringers Y'shtola,14;6
+2293879,Celia,40,338;92;233,341;251;59;60,Fourchenault Leveilleur | Matoya | Tokkapchi,Endwalker Alphinaud & Alisaie | Stormblood Alphinaud & Alisaie | Alphinaud & Alisaie | Louisoix Leveilleur,6;5
+2293880,Ghasa,15,355;348;336,349;330;188,Daivadipa | Hippo Cart | Magus Sisters,Gajasura | Arkasodara | Mammoth,1;6
+2293881,Prudence,35,350;351;140,352;353;132;135,Rhalgr | Azeyma | Cloud of Darkness,Nald | Thal | Phlegethon | Xande,4;14
+2293882,Kilfufu,40,358;63;118,28;22;45;178,Geryon the Steer | Nanamo Ul Namo | Senor Sabotender,Momodi Modi | Ultros & Typhon | Godbert Manderville | Roland,3;6
+2293883,Gamingway,30,369;331;269,344;4;125;173,Dreamingway | Loporrit | Shadowbringers Urianger,Zodiark | Spriggan | Fenrir | Gold Saucer Attendant,14
+2293884,Ruissenaud,40,382;385;335;338,388;367,Proto-Carbuncle | Themis | Erichthonios | Fourchenault Leveilleur,Athena | Hephaistos,4;13
+2293885,Tokimori,35,378;239,221;222;235;246,Okuri Chochin | Yojimbo & Daigoro,Wanyudo & Katasharin | Hatamoto | Suzaku | Seiryu,11;6
+2293886,Ylaire,35,394;395,396;208;340;21,Nophica | Althyk,Nymeia | Rofocale | Quintus van Cinna | Siren,14;4
+2293887,Maillart,40,398;399,112;209;55;198,Thaliak | Llymlaen,Echidna | Argath Thadalfus | Shiva | Yotsuyu,9;6
+2293888,Nyikweni,15,406;10,86;82;107;156;183,Pelupelu | Coeurl,Griffin | Vanu Vanu | Poroggo | Magitek Death Claw | Namazu,2
+2293889,Wopli,15,407;8,158;191;306;2;11,Alpaca | Coblyn,Lost Lamb | Lakshmi | Mother Porxie | Tonberry | Ahriman,3
+2293890,Warsowok,25,408;298,38;347;259;195,Moblin | Dawon,Behemoth | Rampart | Grenoldt | Magnai,4
+2293891,Br'uk Noq',25,409;162;175,205;27;192;171,Branchbearer | Tozol Huatotl | Magitek Predator,Qiqirn Meateater | Scarface Bugaal Ja | Grynewaht | Magitek Vanguard,12
+2293892,Luwyawa,25,410;263,289;141;310;102,Rroneek | Storge,Huaca | Lolorito Nanarito | Siegfried | Archaeornis,3;6
+2293893,Uataaye,25,411;245;207,192;128;48;320,Sentry R8 | Provenance Watcher | Fordola rem Lupis,Grynewaht | Manxome Molaa Ja Ja | Papalymo & Yda | Lunar Ifrit,14;13
+2293894,Larisa,25,412;149;225,319;114;278,Outrunner | Mistbeard | Hiruko,Valens van Varro | Julyan Manderville | Leannan Sith,6;2
+2293895,Gavoll Ja,35,413;291;96;312,239;120;271;250,Gulool Ja Ja | Ruby Weapon | Aymeric | Emerald Weapon,"Yojimbo & Daigoro | Archbishop Thordan VII | Hades | Ultima, the High Seraph",9;11
+2293896,Pawkukwe,35,428;429;197;66,193;318;236,Ark Angel TT | Ark Angel GK | Shinryu | Kan-E-Senna,Rasho | Lunar Bahamut | Pazuzu,4;14
+2293897,Miitso,35,430;431;269;65,93;146;190,Ark Angel HM | Ark Angel EV | Shadowbringers Urianger | Merlwyb Bloefhiswyn,Count Edmont de Fortemps | Kal Myhk | Susano,6;11
+2293898,Malevolent Weasel,35,437;49;53;62,46;45;38,Ollier | Y'shtola | Ramuh | Hildibrand & Nashu Mhakaracca,Thancred | Godbert Manderville | Behemoth,6;9
+2293899,Pudeel Ja,35,442;443;98;119,217;318;394,Wivre | Doppro | Bismarck | Regula van Hydrus,Arenvald Lentinus | Lunar Bahamut | Nophica,12;4
+2293900,Hume Black Mage,35,446;193;245;447,346;120,Kam'lanaut | Rasho | Provenance Watcher | Eald'narche,Zenos Galvus | Archbishop Thordan VII,4;9
+2293901,Tokorzur,35,451;415;55;304,384;95;322,Rorrlo Teh | Ryoqor Terteh | Shiva | Shadowbringers Warrior of Light,Shishio | Haurchefant | 4th-make Cuchulainn,4;6
+2293902,Camalbusert,35,459;86;54;220,460;396;215,Rukhkh | Griffin | Leviathan | Hisui & Kurenai,Genie of the Lamp | Nymeia | Genbu,14;11
+2293903,Hume Thief,35,469;470;397;60,387;220;99,Shantotto the Demon | Alexander Resurrected | Halone | Louisoix Leveilleur,Golbez | Hisui & Kurenai | Nidhogg,14;4
+2293904,Elvaan Red Mage,35,309;90;311;472,367;210;292,"Azulmagia | Ysayle | Gogo, Master of Mimicry | Promathia",Hephaistos | Raubahn & Pipin | Therion,9;6
+2293905,Xiisal Ja,35,475;298;90;291,67;424,Tiisol Ja | Dawon | Ysayle | Ruby Weapon,Raubahn Aldynn | Wuk Lamat,1;6

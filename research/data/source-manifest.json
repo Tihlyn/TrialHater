@@ -1,0 +1,58 @@
+[
+  {
+    "file": "collect-cards.raw.json",
+    "url": "https://ffxivcollect.com/api/triad/cards",
+    "bytes": 430383,
+    "sha256": "fc6a80c8bf688f0e11c60fc4953a53e3a542a3596f28c9276b88ed4eb5bf5843",
+    "file_written_utc": "2026-10-19T14:30:52.755963+00:00"
+  },
+  {
+    "file": "collect-npcs.raw.json",
+    "url": "https://ffxivcollect.com/api/triad/npcs",
+    "bytes": 255143,
+    "sha256": "deef41d8200523ccb8da61bd8f1a48a8fe6edb92d6b9e2e4024e56636837c67a",
+    "file_written_utc": "2026-10-19T14:30:53.169323+00:00"
+  },
+  {
+    "file": "collect-packs.raw.json",
+    "url": "https://ffxivcollect.com/api/triad/packs",
+    "bytes": 63504,
+    "sha256": "063e874579b0b5a3732718bfb878b106ab047f7860f1b0ab9f1711dd2510119d",
+    "file_written_utc": "2026-10-19T14:31:57.943799+00:00"
+  },
+  {
+    "file": "collect-decks-sample.raw.json",
+    "url": "https://ffxivcollect.com/api/triad/decks?limit=100",
+    "bytes": 378334,
+    "sha256": "03f70c4f38af5b7754f6d0ad65302e58d5608e5ecc476e8275d5a0ecfa82c1e0",
+    "file_written_utc": "2026-10-19T14:31:59.001249+00:00"
+  },
+  {
+    "file": "xivapi-card-names.raw.json",
+    "url": "https://v2.xivapi.com/api/sheet/TripleTriadCard?limit=500&fields=Name",
+    "bytes": 22236,
+    "sha256": "7bc60d7434830fae3a77781d2f70b392bb2fdf72ea07b648449354c769379db3",
+    "file_written_utc": "2026-10-19T14:33:58.214164+00:00"
+  },
+  {
+    "file": "xivapi-card-stats.raw.json",
+    "url": "https://v2.xivapi.com/api/sheet/TripleTriadCardResident?limit=500&fields=Top,Right,Bottom,Left,Order,Rarity,TripleTriadCardType",
+    "bytes": 82546,
+    "sha256": "638b60e5f8fa9f4647ac99d466e51eb8b3142f05ca7e1b9d651534736663aca2",
+    "file_written_utc": "2026-10-19T14:33:58.479425+00:00"
+  },
+  {
+    "file": "xivapi-rules.raw.json",
+    "url": "https://v2.xivapi.com/api/sheet/TripleTriadRule?limit=100&fields=Name",
+    "bytes": 764,
+    "sha256": "a46f4502ff3da5e4b617a42cec6ad00db5c53dda02adf3ebe2fca8dc4165c704",
+    "file_written_utc": "2026-10-19T14:33:58.632990+00:00"
+  },
+  {
+    "file": "xivapi-npc-decks.raw.json",
+    "url": "https://v2.xivapi.com/api/sheet/TripleTriad?limit=500&fields=TripleTriadCardFixed,TripleTriadCardVariable,TripleTriadRule,Fee,Reward,Quest",
+    "bytes": 624044,
+    "sha256": "bce92c30d1a77e4fd019ae926204306e9bcd61dd5f73b55198795f9596f043b8",
+    "file_written_utc": "2026-10-19T14:33:59.057016+00:00"
+  }
+]
