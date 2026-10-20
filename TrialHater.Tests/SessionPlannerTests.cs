@@ -23,6 +23,17 @@ public class SessionPlannerTests
     }
 
     [Fact]
+    public void PicksTheChosenDeckRowOrWaitsForTheRanking()
+    {
+        var pick = SessionPlanner.Next(new SessionSnapshot { DeckSelectOpen = true, DeckRow = 1 }, Three, 0, sessionStarted: true);
+        Assert.Equal(SessionActionKind.ConfirmDeck, pick.Kind);
+        Assert.Equal(1, pick.Index);
+        var fallback = SessionPlanner.Next(new SessionSnapshot { DeckSelectOpen = true }, Three, 0, sessionStarted: true);
+        Assert.Equal(-1, fallback.Index);
+        Assert.Equal(SessionActionKind.Wait, Next(new SessionSnapshot { DeckSelectOpen = true, DeckRow = 1, DeckPending = "ranking" }));
+    }
+
+    [Fact]
     public void QuitsWhenTheGoalIsReached()
     {
         Assert.Equal(SessionActionKind.Quit, Next(new SessionSnapshot { ResultOpen = true }, done: 3));

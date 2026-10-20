@@ -62,6 +62,16 @@ public sealed class ConfigWindow : Window
             changed = true;
         }
 
+        var pickDeck = c.SessionPicksDeck;
+        if (ImGui.Checkbox("Sessions pick the best saved deck for the NPC", ref pickDeck))
+        {
+            c.SessionPicksDeck = pickDeck;
+            changed = true;
+        }
+
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("At session start the saved decks are ranked against the NPC (as in the deck builder),\nand the best one is picked in the deck window. Off: the window's confirm button.");
+
         var antiIdle = this.idleGuard.Enabled;
         if (ImGui.Checkbox("Prevent inactivity ejection during auto play", ref antiIdle))
         {

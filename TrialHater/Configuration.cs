@@ -39,6 +39,10 @@ public sealed class Configuration : IPluginConfiguration
     // unattended, so a duty (Open Tournament, Battlehall) does not eject us for inactivity.
     public bool AntiIdle { get; set; } = true;
 
+    // A farming session ranks the saved decks against its NPC and picks the best one in the deck
+    // window (off: the window's confirm button, the game's default deck).
+    public bool SessionPicksDeck { get; set; } = true;
+
     // Raw dumps of the game's own Triple Triad model at every turn, for mapping it
     // (pluginConfigs/TrialHater/model_probe.jsonl).
     public bool ModelProbe { get; set; }

@@ -80,6 +80,14 @@ public sealed unsafe class SessionRunner
 
     public string Status { get; private set; } = "off";
 
+    // Set by the plugin each frame: the saved deck to pick (row and its five card ids), or why to
+    // wait for it. Row -1 = the window's confirm button.
+    public int DeckRow { get; set; } = -1;
+
+    public IReadOnlyList<ushort> DeckCards { get; set; } = [];
+
+    public string? DeckPending { get; set; }
+
     public string LastAction { get; private set; } = string.Empty;
 
     public void Start(uint npcTriadId, string npcName, int maxMatches)
@@ -188,12 +196,27 @@ public sealed unsafe class SessionRunner
         SessionActionKind.Quit => AddonOps.ActivateButton(this.Addon("TripleTriadResult"), ResultQuitNode),
         SessionActionKind.Challenge => AddonOps.ActivateButton(this.Addon("TripleTriadRequest"), RequestChallengeNode),
         SessionActionKind.DeclineRequest => AddonOps.ActivateButton(this.Addon("TripleTriadRequest"), RequestQuitNode),
+        SessionActionKind.ConfirmDeck when action.Index >= 0 => this.PickDeck(action.Index),
         SessionActionKind.ConfirmDeck => AddonOps.ActivateButton(this.Addon("TripleTriadSelDeck"), DeckConfirmNode),
         SessionActionKind.AdvanceTalk => AddonOps.Click(this.Addon("Talk")),
         SessionActionKind.ChooseMenu => AddonOps.Callback(this.Addon("SelectIconString"), true, action.Index),
         SessionActionKind.Interact => this.Interact(),
         _ => DispatchResult.Refused($"nothing to do for {action.Kind}"),
     };
+
+    // Clicking a deck row sends callback [row] and starts the match with that deck (2026-10-20:
+    // [1] played Deck 2). The window lists each row as (valid, name, 5 x 88000 + card id) in
+    // stride 7 from [2]; the row must hold exactly the chosen deck, or nothing is sent.
+    private DispatchResult PickDeck(int row)
+    {
+        var addon = this.Addon("TripleTriadSelDeck");
+        if (addon == null)
+            return DispatchResult.Refused("deck window gone");
+        var shown = Enumerable.Range(0, 5).Select(i => IntValue(addon, 4 + (7 * row) + i) - 88000).ToList();
+        if (!shown.SequenceEqual(this.DeckCards.Select(id => (int)id)))
+            return DispatchResult.Refused($"row {row} shows cards {string.Join(",", shown)}, not the chosen deck {string.Join(",", this.DeckCards)}");
+        return AddonOps.Callback(addon, true, row);
+    }
 
     private DispatchResult Interact()
     {
@@ -234,6 +257,8 @@ public sealed unsafe class SessionRunner
                                  || this.Visible("TripleTriadRequest") || this.Visible("TripleTriadSelDeck"),
             ResultKey = $"{this.Run("TripleTriadResult", result != null)}:{StringValue(result, 3)}",
             DeckSelectOpen = deck != null && Actionable(deck, DeckConfirmNode),
+            DeckRow = this.DeckRow,
+            DeckPending = this.DeckPending,
             RequestOpen = request != null && Actionable(request, RequestChallengeNode),
             RequestKey = this.Run("TripleTriadRequest", request != null).ToString(),
             // Only the session NPC's lines (Talk[1] is the speaker; some Triad lines leave it empty).

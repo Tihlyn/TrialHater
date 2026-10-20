@@ -50,7 +50,7 @@ The player's drag-drop reaches agent 174 as `ReceiveEvent [Int 14, UInt slot << 
 | `SelectIconString` (NPC menu) | entry whose icon (AtkValues `6 + 3k`) is **71101** (Malevolent Weasel) or **71102** (hall overseer) | — | `[k]`, close = true |
 | `Talk` | collision node | `MouseClick` | none; `[0]` is the line, `[1]` the speaker (sometimes empty) |
 | `TripleTriadRequest` | node 41 Challenge / node 42 Quit | `ButtonClick` 1 / 2 | `[0]` / `[1]` |
-| `TripleTriadSelDeck` | node 3 confirm; list node 2 selects a row | `ButtonClick` 2 / `ListItemClick` 1 | `[5]` |
+| `TripleTriadSelDeck` | node 3 confirm (the game's default deck); list node 2: clicking a row picks that deck and starts the match | `ButtonClick` 2 / `ListItemClick` 1 | `[5]` / `[row]` (2026-10-20: `[1]` played Deck 2; clicks on empty rows did nothing) |
 | `TripleTriadResult` | node 20 rematch / node 21 quit | `ButtonClick` 1 / 2 | `[0]` (the game then sends `[-2]` itself) / `[1]` |
 
 A rematch goes Result → Request → deck → board without the NPC menu or Talk. Quitting adds one Talk line. `SelDeck` values: `[0]` deck count, then per deck `(valid, name, 5 small-icon ids = 88000 + card id)` in stride 7 from `[2]`. `Result` values: `[3]` the prompt ("Seek a rematch?", then "Rematch request submitted..."), `[9..11]` the reward card (item id, name).
@@ -196,3 +196,7 @@ No stall. 609 automatic placements, and 18 Swap matches (10 Kaizan, 8 Tsuzura), 
 **Combo follows Reverse.** ProbeReplay found 19 mismatches, all in Plus + Reverse matches (Gyoei, and 4 Tsuzura Plus rolls). Same + Reverse matches replayed fine because none had a combo. In every mismatch, a card flipped by Plus then combo-captured (or failed to capture) its neighbour the way Reverse says, not the plain comparison. The engine now uses the placement comparison for combos. After the fix: 176 matches, 1584 placements, 0 mismatches. The plugin went 14-4-2 against Gyoei while mispredicting combos both ways (flips that did not happen, and flips it did not expect).
 
 Tsuzura's Roulette never rolled Random or Order in 70 matches.
+
+## Session 10: 2026-10-20 14:38-14:45 UTC, deck selection rows
+
+`TripleTriadSelDeck` row k is (valid, name, 5 x 88000 + card id) in stride 7 from `[2]`; k is the saved deck slot (`GoldSaucerModule.GetDeck(k)`). Clicking a row fires `ListItemClick` on list node 2, then callback `[k]`, and the window closes: there is no separate confirm. With Deck 2 empty, clicks on rows 1, 2 and 4 sent `[1]`, `[2]`, `[4]` and nothing happened. Once Deck 2 was built, `[1]` started the match, and the hand dealt was Deck 2's cards in slot order (9A17, 6967, 6576, 4782, 5468). The session sends `[k]` itself (`SessionRunner.PickDeck`), but only after checking that row k shows exactly the chosen deck's five ids.

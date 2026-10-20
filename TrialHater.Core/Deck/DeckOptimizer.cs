@@ -87,6 +87,22 @@ public static class DeckOptimizer
         return new DeckSearchResult(best, savedScores, $"{npc.Name} [{rules}]: {hands.Count} NPC hand(s), {candidates.Count} decks tried, {how}");
     }
 
+    // Scores only the given decks (a session choosing among the saved decks), in their order.
+    // Empty when the NPC has no deck data or the deck does not matter (Random).
+    public static IReadOnlyList<DeckScore> RankSaved(NpcDeck npc, RuleSet rules, IReadOnlyList<IReadOnlyList<CardInfo>> saved,
+        CardCatalog catalog, DeckEvaluationOptions options, CancellationToken cancel = default)
+    {
+        var hands = DeckRules.NpcHands(npc, catalog);
+        if (hands.Count == 0 || rules.Has(TriadRule.Random))
+            return [];
+        var evalRules = DeckRules.ForEvaluation(rules);
+        var exact = !evalRules.Has(TriadRule.Chaos) && !evalRules.Has(TriadRule.Order);
+        var results = new DeckScore[saved.Count];
+        Parallel.For(0, saved.Count, new ParallelOptions { CancellationToken = cancel },
+            i => results[i] = Final(saved[i], hands, rules, options, exact, cancel));
+        return results;
+    }
+
     // Under Order with exact off the final score is simulated; give it the exact budget of games.
     private static DeckScore Final(IReadOnlyList<CardInfo> deck, List<CardStats[]> hands, RuleSet rules,
         DeckEvaluationOptions options, bool exact, CancellationToken cancel)

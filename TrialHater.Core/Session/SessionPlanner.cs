@@ -17,6 +17,12 @@ public sealed record SessionSnapshot
 
     public bool DeckSelectOpen { get; init; }
 
+    // The saved deck row to pick in the deck window (-1: its own confirm button, the game's
+    // default deck), and why to wait instead (the saved decks are still being ranked).
+    public int DeckRow { get; init; } = -1;
+
+    public string? DeckPending { get; init; }
+
     public bool RequestOpen { get; init; }
 
     public string RequestKey { get; init; } = string.Empty;
@@ -89,7 +95,13 @@ public static class SessionPlanner
         }
 
         if (s.DeckSelectOpen)
-            return new SessionAction(SessionActionKind.ConfirmDeck, "TripleTriadSelDeck", "deck", "deck selection");
+        {
+            if (s.DeckPending is { } pending)
+                return SessionAction.Wait(pending);
+            return s.DeckRow >= 0
+                ? new SessionAction(SessionActionKind.ConfirmDeck, "TripleTriadSelDeck", "deck", $"deck row {s.DeckRow}", s.DeckRow)
+                : new SessionAction(SessionActionKind.ConfirmDeck, "TripleTriadSelDeck", "deck", "deck selection");
+        }
         if (s.RequestOpen)
         {
             return stopping

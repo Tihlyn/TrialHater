@@ -62,6 +62,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
         this.probe = new ModelProbe(Path.Combine(pluginInterface.GetPluginConfigDirectory(), "model_probe.jsonl"));
         this.journal = new MatchJournal(pluginInterface.GetPluginConfigDirectory(), (ex, msg) => log.Warning(ex, msg));
         this.Decks = new DeckService((ex, msg) => log.Error(ex, msg));
+        this.DeckChooser = new SessionDeckChooser(msg => log.Information(msg));
         this.Tracker.Event += this.OnTrackerEvent;
         this.Tracker.RedMoved += this.journal.RedMoved;
         this.Tracker.MatchEnded += this.OnMatchEnded;
@@ -121,6 +122,8 @@ public sealed unsafe class Plugin : IDalamudPlugin
 
     public DeckService Decks { get; }
 
+    public SessionDeckChooser DeckChooser { get; }
+
     public WindowSystem WindowSystem { get; }
 
     public MainWindow MainWindow { get; }
@@ -134,6 +137,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
         this.framework.Update -= this.OnFrameworkUpdate;
         this.IdleGuard.Reset();
         this.Decks.Dispose();
+        this.DeckChooser.Dispose();
         this.Tracker.Event -= this.OnTrackerEvent;
         this.Tracker.RedMoved -= this.journal.RedMoved;
         this.Tracker.MatchEnded -= this.OnMatchEnded;
@@ -201,6 +205,10 @@ public sealed unsafe class Plugin : IDalamudPlugin
 
         if (this.Session.Active && !this.AutoPlayer.Enabled)
             this.Session.Stop("auto play is off");
+        var pickDeck = this.Configuration.SessionPicksDeck;
+        this.Session.DeckRow = pickDeck ? this.DeckChooser.Row : -1;
+        this.Session.DeckCards = this.DeckChooser.Cards;
+        this.Session.DeckPending = pickDeck && this.Session.Active ? this.DeckChooser.Pending : null;
         if (!blocked)
         {
             this.Session.Tick(DateTime.UtcNow, this.Configuration.SessionDelayMs,
@@ -221,7 +229,17 @@ public sealed unsafe class Plugin : IDalamudPlugin
             return "target a Triple Triad NPC first";
         this.SetAutoPlay(true);
         this.Session.Start(npc.TriadId, npc.Name, this.Configuration.SessionMaxMatches);
+        if (this.Configuration.SessionPicksDeck)
+            this.ChooseSessionDeck(data, npc);
         return null;
+    }
+
+    // Ranks the saved decks against the session NPC under the rules its recorded matches had.
+    private void ChooseSessionDeck(GameData data, NpcDeck npc)
+    {
+        var history = this.journal.RulesHistory(npc.TriadId);
+        var (rules, _) = DeckRules.ExpectedRules(npc, history);
+        this.DeckChooser.Start(npc, rules, history.Count == 0, Collection.SavedDecks(data.Cards), data.Cards);
     }
 
     // Searches the best decks from the collection against the NPC we are facing, under the rules
@@ -296,6 +314,11 @@ public sealed unsafe class Plugin : IDalamudPlugin
     {
         this.journal.MatchEnded(this.Tracker, this.CurrentNpc, blueCards, this.AutoPlayer.Placed - this.placedAtMatchStart);
         this.Session.MatchEnded(blueCards);
+
+        // The first recorded match shows the NPC's regional rules: rank the saved decks again.
+        if (this.Session.Active && this.Configuration.SessionPicksDeck && this.DeckChooser.SheetRulesOnly
+            && this.Data is { } data && data.Npcs.Get(this.Session.NpcTriadId) is { } npc)
+            this.ChooseSessionDeck(data, npc);
         this.placedAtMatchStart = this.AutoPlayer.Placed;
     }
 
