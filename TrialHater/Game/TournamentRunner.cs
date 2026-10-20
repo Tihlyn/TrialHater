@@ -70,6 +70,9 @@ public sealed unsafe class TournamentRunner
 
     public string LastAction { get; private set; } = string.Empty;
 
+    // Distance to the target's hitbox edge at the last read, or -1.
+    public float Distance { get; private set; } = -1;
+
     // `maxTournaments` 0 = until stopped. Needs the Official targeted.
     public string? Start(int maxTournaments)
     {
@@ -106,6 +109,9 @@ public sealed unsafe class TournamentRunner
         var action = TournamentPlanner.Next(snapshot, this.Phase);
         if (action.Kind == TournamentActionKind.Wait)
         {
+            // Each new reason once in the log, so a stall says why.
+            if (action.Reason != this.Status)
+                this.log($"[Tournament] waiting: {action.Reason} (target {this.targets.Target?.Name.TextValue ?? "none"}, distance {this.Distance:0.0})");
             this.Status = action.Reason;
             return;
         }
@@ -231,8 +237,9 @@ public sealed unsafe class TournamentRunner
 
         var player = this.objects.LocalPlayer;
         var target = this.targets.Target;
-        var canInteract = player is not null && target is not null && target.BaseId == this.officialBaseId
-            && System.Numerics.Vector3.Distance(player.Position, target.Position) <= InteractRange;
+        // Measured to the edge of the NPC's hitbox: the Official stands behind a counter.
+        this.Distance = player is null || target is null ? -1 : System.Numerics.Vector3.Distance(player.Position, target.Position) - target.HitboxRadius;
+        var canInteract = player is not null && target is not null && target.BaseId == this.officialBaseId && this.Distance <= InteractRange;
 
         return new TournamentSnapshot
         {
