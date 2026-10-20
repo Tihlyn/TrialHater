@@ -53,6 +53,10 @@ public sealed record MatchView(
     // opponent's.
     public IReadOnlyList<byte>? SlotStars { get; init; }
 
+    // Draft: the opponent's cards seen in earlier matches of this tournament (its drafted deck is
+    // kept throughout), up to 5.
+    public IReadOnlyList<CardStats> KnownDeck { get; init; } = [];
+
     public int HiddenRedCount => this.Red.Count(s => s.State == SlotState.Hidden);
 
     public bool RedFullyKnown => this.HiddenRedCount == 0;
@@ -64,7 +68,7 @@ public sealed record MatchView(
         var board = string.Join(",", this.Board.Select(c => c is { } b ? $"{(int)b.Owner}{b.Card}" : "."));
         var blue = string.Join(",", this.Blue.Select(s => s.ToString()));
         var red = string.Join(",", this.Red.Select(s => s.ToString()));
-        return $"{this.Rules.Mask}|{board}|{blue}|{red}|{this.ToMove}|{this.ForcedSlot}|{this.NpcTriadId}|{this.Round}|{string.Join(",", this.RedPlayed)}";
+        return $"{this.Rules.Mask}|{board}|{blue}|{red}|{this.ToMove}|{this.ForcedSlot}|{this.NpcTriadId}|{this.Round}|{string.Join(",", this.RedPlayed)}|{string.Join(",", this.KnownDeck)}";
     }
 
     // The position with Red's hand replaced by one hypothesis. Red's card order is not visible

@@ -77,7 +77,13 @@ public sealed class MainWindow : Window
         var tracker = plugin.Tracker;
         var npc = plugin.CurrentNpc;
         if (npc is null && tracker.InMatch && tracker.Opponent is { } opponent)
-            ImGui.TextUnformatted($"Opponent: {opponent} ({(tracker.Rules.Has(TriadRule.Draft) ? "drafted deck" : "no deck data")}, hidden cards sampled)");
+        {
+            var known = tracker.View?.KnownDeck.Count ?? 0;
+            var deck = !tracker.Rules.Has(TriadRule.Draft) ? "no deck data, hidden cards sampled"
+                : known > 0 ? $"drafted deck, {known}/5 cards known from an earlier match"
+                : "drafted deck, hidden cards sampled";
+            ImGui.TextUnformatted($"Opponent: {opponent} ({deck})");
+        }
         else
             ImGui.TextUnformatted($"NPC: {npc?.Name ?? (tracker.NpcTriadId == 0 ? "unknown (target the NPC before challenging)" : $"#{tracker.NpcTriadId}")}");
         if (tracker.InMatch)

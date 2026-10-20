@@ -14,6 +14,14 @@ public static class OpenTournament
 
     private const long Offset = 3600;
 
+    // The start of the tournament slot `now` falls in (the latest start at or before it).
+    public static DateTimeOffset LatestStart(DateTimeOffset now)
+    {
+        var interval = (long)Interval.TotalSeconds;
+        var slot = (long)Math.Floor((now.ToUnixTimeSeconds() - Offset) / (double)interval);
+        return DateTimeOffset.FromUnixTimeSeconds((slot * interval) + Offset);
+    }
+
     // `rows[i]` = rules of sheet row i + 1.
     public static IEnumerable<ScheduledTournament> Upcoming(IReadOnlyList<RuleSet> rows, DateTimeOffset now, int count)
     {

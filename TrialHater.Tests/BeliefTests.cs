@@ -118,6 +118,50 @@ public class BeliefTests
         Assert.Equal(belief.Hypotheses.Select(h => h.Description), HandBelief.Build(view, null, Catalog).Hypotheses.Select(h => h.Description));
     }
 
+    // One card per rarity whose stats belong to that rarity only, in slot order 3-5-2-4-1.
+    private static CardStats[] DraftedDeck()
+        => new byte[] { 3, 5, 2, 4, 1 }.Select(star => Catalog.All.OrderBy(c => c.Id)
+            .First(c => c.Stars == star && Catalog.WithStats(c.Stats).All(o => o.Stars == star)).Stats).ToArray();
+
+    [Fact]
+    public void DraftUsesTheDeckKnownFromAnEarlierMatch()
+    {
+        // The opponent showed all 5 cards last match; slot 2 is shown again, the rest is exact.
+        var deck = DraftedDeck();
+        var red = new[] { HandSlot.Hidden, HandSlot.Hidden, HandSlot.Of(deck[2]), HandSlot.Hidden, HandSlot.Hidden };
+        var view = new MatchView(RuleSet.Of(TriadRule.Draft), EmptyBoard(), BlueHand(), red, Side.Blue)
+        {
+            SlotStars = [3, 5, 2, 4, 1],
+            KnownDeck = [deck[4], deck[0], deck[3], deck[1], deck[2]],
+        };
+        var belief = HandBelief.Build(view, null, Catalog);
+        var only = Assert.Single(belief.Hypotheses);
+        Assert.Equal(deck.Select(c => (CardStats?)c), only.RedHand);
+        Assert.Contains("exact", belief.Status);
+    }
+
+    [Fact]
+    public void DraftSamplesOnlyTheSlotsTheEarlierMatchDidNotShow()
+    {
+        // 4 cards known (the 1-star one never came out): slots 0, 1 and 3 are fixed, slot 4 sampled.
+        var deck = DraftedDeck();
+        var red = new[] { HandSlot.Hidden, HandSlot.Hidden, HandSlot.Of(deck[2]), HandSlot.Hidden, HandSlot.Hidden };
+        var view = new MatchView(RuleSet.Of(TriadRule.Draft), EmptyBoard(), BlueHand(), red, Side.Blue)
+        {
+            SlotStars = [3, 5, 2, 4, 1],
+            KnownDeck = deck.Take(4).ToList(),
+        };
+        var belief = HandBelief.Build(view, null, Catalog);
+        Assert.True(belief.Hypotheses.Count > 1, belief.Status);
+        foreach (var h in belief.Hypotheses)
+        {
+            Assert.Equal(deck[0], h.RedHand[0]);
+            Assert.Equal(deck[1], h.RedHand[1]);
+            Assert.Equal(deck[3], h.RedHand[3]);
+            Assert.Contains((byte)1, Catalog.WithStats(h.RedHand[4]!.Value).Select(c => c.Stars));
+        }
+    }
+
     [Fact]
     public void DraftFillsEachHiddenSlotWithACardOfItsRarity()
     {

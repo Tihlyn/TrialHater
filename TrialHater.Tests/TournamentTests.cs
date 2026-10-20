@@ -1,4 +1,5 @@
 using TrialHater.Core.Rules;
+using static TrialHater.Tests.Fixtures;
 using TrialHater.Core.Tournament;
 using Xunit;
 
@@ -41,5 +42,26 @@ public class TournamentTests
     {
         var start = new DateTimeOffset(2026, 10, 20, 1, 0, 0, TimeSpan.Zero);
         Assert.Equal(start, OpenTournament.Upcoming(Rows, start, 1).Single().StartUtc);
+    }
+
+    [Fact]
+    public void LatestStartIsTheSlotNowFallsIn()
+    {
+        Assert.Equal(new DateTimeOffset(2026, 10, 19, 23, 0, 0, TimeSpan.Zero), OpenTournament.LatestStart(new DateTimeOffset(2026, 10, 19, 23, 31, 0, TimeSpan.Zero)));
+        Assert.Equal(new DateTimeOffset(2026, 10, 19, 21, 0, 0, TimeSpan.Zero), OpenTournament.LatestStart(new DateTimeOffset(2026, 10, 19, 22, 59, 59, TimeSpan.Zero)));
+        Assert.Equal(new DateTimeOffset(2026, 10, 20, 1, 0, 0, TimeSpan.Zero), OpenTournament.LatestStart(new DateTimeOffset(2026, 10, 20, 1, 0, 0, TimeSpan.Zero)));
+    }
+
+    [Fact]
+    public void OpponentDecksMergeWithinATournamentAndResetAfterIt()
+    {
+        var decks = new TournamentDecks();
+        var t = new DateTimeOffset(2026, 10, 19, 23, 10, 0, TimeSpan.Zero);
+        decks.Record("Fox Dragus", [C("1111"), C("2222"), C("3333")], t);
+        // Second match: 2222 again (the same card, not a second copy) and two new ones.
+        var known = decks.Record("fox dragus", [C("2222"), C("4444"), C("5555")], t.AddMinutes(15));
+        Assert.Equal([C("1111"), C("2222"), C("3333"), C("4444"), C("5555")], known);
+        Assert.Empty(decks.Get("Someone Else", t));
+        Assert.Empty(decks.Get("Fox Dragus", t.AddHours(2)));
     }
 }

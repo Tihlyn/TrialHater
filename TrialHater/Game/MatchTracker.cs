@@ -2,6 +2,7 @@ using TrialHater.Core.Cards;
 using TrialHater.Core.Engine;
 using TrialHater.Core.Match;
 using TrialHater.Core.Rules;
+using TrialHater.Core.Tournament;
 
 namespace TrialHater.Game;
 
@@ -55,6 +56,10 @@ public sealed class MatchTracker
 
     // The opponent's name as the board shows it (AtkValues[4]), kept after the board closes.
     public string? Opponent { get; private set; }
+
+    // Open Tournament: what each opponent's drafted deck showed in earlier matches. Survives
+    // Reset (it spans matches); it clears itself when the next tournament slot starts.
+    public TournamentDecks Decks { get; } = new();
 
     public void Reset()
     {
@@ -139,8 +144,22 @@ public sealed class MatchTracker
         var final = this.previous;
         var score = final is null ? -1 : final.Board.Count(s => s.HasCard && s.Owner == 1) + final.BlueInHand;
         this.Note($"{why}: {score}/10 cards ({(score > 5 ? "win" : score == 5 ? "draw" : "loss")})");
+        if (final is not null && this.rules.Has(TriadRule.Draft) && this.Opponent is { Length: > 0 } opponent)
+            this.RememberDeck(final, opponent);
         if (score >= 0)
             this.MatchEnded?.Invoke(score);
+    }
+
+    // Everything the opponent showed: cards played, cards left face up in its hand, and (Swap) its
+    // card in our hand instead of ours in its hand.
+    private void RememberDeck(BoardFrame final, string opponent)
+    {
+        var seen = final.Red.Where(s => s.HasCard && !s.Hidden).Select(Stats).Concat(this.redPlayed).ToList();
+        foreach (var card in this.redForeign)
+            seen.Remove(card);
+        seen.AddRange(this.redLost);
+        var deck = this.Decks.Record(opponent, seen, DateTimeOffset.UtcNow);
+        this.Note($"tournament memory: {deck.Count}/5 cards of {opponent}'s deck known ({string.Join(", ", deck)})");
     }
 
     private void StartMatch(BoardFrame frame)
@@ -310,6 +329,7 @@ public sealed class MatchTracker
             RedForeign = this.redForeign,
             RedLost = this.redLost,
             SlotStars = this.slotStars,
+            KnownDeck = this.rules.Has(TriadRule.Draft) && this.Opponent is { Length: > 0 } opponent ? this.Decks.Get(opponent, DateTimeOffset.UtcNow) : [],
         };
     }
 

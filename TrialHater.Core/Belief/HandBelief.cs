@@ -129,8 +129,10 @@ public static class HandBelief
     // share one slot order, which differs between tournaments (3-5-2-4-1, then 2-1-4-3-5 on
     // 2026-10-19). With our slot order read (view.SlotStars), each hidden slot gets a random card of
     // its rarity; without it, the hidden cards take the rarities not yet seen, in any slot. Cards are
-    // not excluded for being seen elsewhere (two drafted decks can share a card). Swap and Sudden
-    // Death (redealt from the board) break the one-per-rarity hand: sample as unknown then.
+    // not excluded for being seen elsewhere (two drafted decks can share a card). Cards of the
+    // opponent's deck known from an earlier match (view.KnownDeck) fill the hidden slots of their
+    // rarity first. Swap and Sudden Death (redealt from the board) break the one-per-rarity hand:
+    // sample as unknown then.
     private static BeliefResult SampleDraft(MatchView view, CardStats?[] redHand, List<int> hiddenSlots, CardCatalog catalog)
     {
         if (view.Round > 0 || view.Rules.Has(TriadRule.Swap) || view.Red.Length != 5)
@@ -161,22 +163,56 @@ public static class HandBelief
             how = "slot order unknown";
         }
 
+        var known = KnownHidden(view, stars, catalog);
         var byStars = catalog.All.OrderBy(c => c.Id).GroupBy(c => c.Stars).ToDictionary(g => g.Key, g => g.ToList());
-        if (stars.Any(s => !byStars.ContainsKey(s)))
+        if (stars.Where((_, i) => known[i] is null).Any(s => !byStars.ContainsKey(s)))
             return new BeliefResult([], "Draft: the card list has no card of a hidden slot's rarity");
 
+        var knownCount = known.Count(k => k is not null);
         var rng = new Random(StableHash(view.Fingerprint()));
         var unknowns = new List<IReadOnlyList<CardStats>>();
-        for (var n = 0; n < DraftSamples; n++)
+        for (var n = 0; n < (knownCount == stars.Length ? 1 : DraftSamples); n++)
         {
-            unknowns.Add(stars.Select(s =>
+            unknowns.Add(stars.Select((s, i) =>
             {
+                if (known[i] is { } card)
+                    return card;
                 var tier = byStars[s];
                 return tier[rng.Next(tier.Count)].Stats;
             }).ToList());
         }
 
-        return Assemble(redHand, hiddenSlots, unknowns, $"Draft (one card per rarity, {how}): sampled, lower confidence", keepOrder: true);
+        var memory = view.KnownDeck.Count == 0 ? string.Empty : $", {knownCount} of {stars.Length} hidden known from an earlier match";
+        var confidence = knownCount == stars.Length ? "exact" : "sampled, lower confidence";
+        return Assemble(redHand, hiddenSlots, unknowns, $"Draft (one card per rarity, {how}{memory}): {confidence}", keepOrder: true);
+    }
+
+    // For each hidden slot (by its rarity), the card of the opponent's known deck that must be in
+    // it, or null. Known cards already seen this match (in hand or played) are used up first. If a
+    // seen card contradicts a complete known deck (another player under the same name?), the
+    // memory is ignored.
+    private static CardStats?[] KnownHidden(MatchView view, byte[] stars, CardCatalog catalog)
+    {
+        var result = new CardStats?[stars.Length];
+        var left = new List<CardStats>(view.KnownDeck);
+        if (left.Count == 0)
+            return result;
+        foreach (var card in view.Red.Where(s => s.State == SlotState.Visible).Select(s => s.Card).Concat(view.RedPlayed))
+        {
+            if (!left.Remove(card) && view.KnownDeck.Count == 5)
+                return result;
+        }
+
+        for (var i = 0; i < stars.Length; i++)
+        {
+            var match = left.FindIndex(c => catalog.WithStats(c).Any(info => info.Stars == stars[i]));
+            if (match < 0)
+                continue;
+            result[i] = left[match];
+            left.RemoveAt(match);
+        }
+
+        return result;
     }
 
     private static int StableHash(string text)
