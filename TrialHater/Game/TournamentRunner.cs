@@ -184,7 +184,7 @@ public sealed unsafe class TournamentRunner
                 this.TournamentsDone++;
                 this.Phase = TournamentPhase.Registering;
                 if (this.MaxTournaments > 0 && this.TournamentsDone >= this.MaxTournaments)
-                    this.Stop($"{this.TournamentsDone} tournament(s) played");
+                    this.Stop("goal reached");
                 break;
         }
     }
