@@ -32,6 +32,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
     private readonly MatchJournal journal;
     private long frameCounter;
     private int placedAtMatchStart;
+    private bool writtenChecked = true;
 
     public Plugin(
         IDalamudPluginInterface pluginInterface,
@@ -63,6 +64,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
         this.journal = new MatchJournal(pluginInterface.GetPluginConfigDirectory(), (ex, msg) => log.Warning(ex, msg));
         this.Decks = new DeckService((ex, msg) => log.Error(ex, msg));
         this.DeckChooser = new SessionDeckChooser(msg => log.Information(msg));
+        this.DeckWriter = new DeckWriter(gameGui, msg => log.Information(msg));
         this.Tracker.Event += this.OnTrackerEvent;
         this.Tracker.RedMoved += this.journal.RedMoved;
         this.Tracker.MatchEnded += this.OnMatchEnded;
@@ -123,6 +125,8 @@ public sealed unsafe class Plugin : IDalamudPlugin
     public DeckService Decks { get; }
 
     public SessionDeckChooser DeckChooser { get; }
+
+    public DeckWriter DeckWriter { get; }
 
     public WindowSystem WindowSystem { get; }
 
@@ -205,6 +209,10 @@ public sealed unsafe class Plugin : IDalamudPlugin
 
         if (this.Session.Active && !this.AutoPlayer.Enabled)
             this.Session.Stop("auto play is off");
+        if (!blocked)
+            this.DeckWriter.Tick(DateTime.UtcNow);
+        this.CheckWrittenDeck(data);
+
         var pickDeck = this.Configuration.SessionPicksDeck;
         this.Session.DeckRow = pickDeck ? this.DeckChooser.Row : -1;
         this.Session.DeckCards = this.DeckChooser.Cards;
@@ -258,6 +266,41 @@ public sealed unsafe class Plugin : IDalamudPlugin
         this.Decks.Start(npc, rules, source, owned, Collection.SavedDecks(data.Cards), data.Cards);
         this.Log.Information($"[Deck] searching decks against {npc.Name} [{rules}] ({source}), {owned.Count} owned cards");
         return null;
+    }
+
+    // Writes a deck into the slot the settings allow, through the Gold Saucer deck editor.
+    public string? StartDeckWrite(IReadOnlyList<CardInfo> deck)
+    {
+        if (this.Data is not { } data)
+            return "sheets are still loading";
+        var slot = this.Configuration.DeckWriteSlot;
+        if (slot < 0)
+            return "no deck slot may be written (Settings)";
+        if (this.Tracker.InMatch || this.Session.Active)
+            return "not during a match or a session";
+        if (this.DeckWriter.Active)
+            return "a deck is already being written";
+        if (DeckRules.Problem(deck) is { } problem)
+            return $"not a legal deck: {problem}";
+        var owned = Collection.Owned(data.Cards).Select(c => c.Id).ToHashSet();
+        if (deck.FirstOrDefault(c => !owned.Contains(c.Id)) is { } missing)
+            return $"{missing.Name} is not in the collection";
+        this.writtenChecked = false;
+        this.DeckWriter.Start(slot, deck);
+        return null;
+    }
+
+    // After a write, compare the saved deck in game memory with what was written.
+    private void CheckWrittenDeck(GameData data)
+    {
+        if (this.writtenChecked || this.DeckWriter.Active || this.DeckWriter.Written is not { } written)
+            return;
+        this.writtenChecked = true;
+        var saved = Collection.SavedDecks(data.Cards).FirstOrDefault(d => d.Index == written.Slot);
+        var matches = saved is not null && saved.Cards.Select(c => c.Id).SequenceEqual(written.Cards);
+        this.Log.Information(matches
+            ? $"[DeckWriter] Deck {written.Slot + 1} in game memory matches what was written"
+            : $"[DeckWriter] Deck {written.Slot + 1} in game memory is {(saved is null ? "incomplete" : string.Join(",", saved.Cards.Select(c => c.Id)))}, not {string.Join(",", written.Cards)}");
     }
 
     // The NPC we are facing: the one in the current match, else the current target, else the

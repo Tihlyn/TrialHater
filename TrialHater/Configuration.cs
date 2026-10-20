@@ -43,6 +43,10 @@ public sealed class Configuration : IPluginConfiguration
     // window (off: the window's confirm button, the game's default deck).
     public bool SessionPicksDeck { get; set; } = true;
 
+    // The saved deck slot (0-based) the plugin may overwrite with a deck from the deck builder;
+    // -1 = none. The player's other decks are never written.
+    public int DeckWriteSlot { get; set; } = 4;
+
     // Raw dumps of the game's own Triple Triad model at every turn, for mapping it
     // (pluginConfigs/TrialHater/model_probe.jsonl).
     public bool ModelProbe { get; set; }
@@ -64,6 +68,7 @@ public sealed class Configuration : IPluginConfiguration
     private void Clamp()
     {
         this.ModelEpsilon = Math.Clamp(this.ModelEpsilon, 0f, 1f);
+        this.DeckWriteSlot = Math.Clamp(this.DeckWriteSlot, -1, 4);
         this.ExploitMinPlaced = Math.Clamp(this.ExploitMinPlaced, 0, 9);
         this.ExploitBudgetSeconds = Math.Clamp(this.ExploitBudgetSeconds, 0.2f, 30f);
         this.PlaceDelayMs = Math.Clamp(this.PlaceDelayMs, 0, 10000);

@@ -1,3 +1,4 @@
+using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 
 namespace TrialHater.Game;
@@ -63,6 +64,33 @@ internal static unsafe class AddonOps
 
         addon->FireCallback((uint)values.Length, vals, close);
         return new DispatchResult(true, $"callback [{string.Join(", ", values)}] close={close}");
+    }
+
+    // An Int/UInt AtkValue, or 0 (absent, other type).
+    public static int IntValue(AtkUnitBase* addon, int index)
+    {
+        if (addon == null || index < 0 || index >= addon->AtkValuesCount)
+            return 0;
+        ref var v = ref addon->AtkValues[index];
+        return v.Type is AtkValueType.Int or AtkValueType.UInt ? v.Int : 0;
+    }
+
+    // A string AtkValue, or "" (absent, other type).
+    public static string StringValue(AtkUnitBase* addon, int index)
+    {
+        if (addon == null || index < 0 || index >= addon->AtkValuesCount)
+            return string.Empty;
+        ref var v = ref addon->AtkValues[index];
+        if (v.Type is not (AtkValueType.String or AtkValueType.ConstString or AtkValueType.ManagedString))
+            return string.Empty;
+        try
+        {
+            return v.String.ExtractText();
+        }
+        catch
+        {
+            return string.Empty;
+        }
     }
 
     public static bool IsChainVisible(AtkResNode* node, out string why)

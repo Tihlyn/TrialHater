@@ -72,6 +72,15 @@ public sealed class ConfigWindow : Window
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip("At session start the saved decks are ranked against the NPC (as in the deck builder),\nand the best one is picked in the deck window. Off: the window's confirm button.");
 
+        var writeSlot = c.DeckWriteSlot + 1;
+        string[] slots = ["None", "Deck 1", "Deck 2", "Deck 3", "Deck 4", "Deck 5"];
+        ImGui.SetNextItemWidth(120);
+        if (ImGui.Combo("Deck slot the plugin may overwrite", ref writeSlot, slots, slots.Length))
+        {
+            c.DeckWriteSlot = writeSlot - 1;
+            changed = true;
+        }
+
         var antiIdle = this.idleGuard.Enabled;
         if (ImGui.Checkbox("Prevent inactivity ejection during auto play", ref antiIdle))
         {

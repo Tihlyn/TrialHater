@@ -192,8 +192,40 @@ public sealed class MainWindow : Window
         }
 
         ImGui.EndTable();
-        if (result.Best.Count > 0)
-            ImGui.TextColored(MutedColor, "Build #1 in a free deck slot (keep the card order under Order).");
+        this.DrawDeckWrite(result.Best.Count > 0 ? result.Best[0].Cards : null);
+    }
+
+    private string? writeError;
+
+    // Writes the best deck into the slot the settings allow (Gold Saucer deck editor).
+    private void DrawDeckWrite(IReadOnlyList<Core.Cards.CardInfo>? best)
+    {
+        var writer = this.plugin.DeckWriter;
+        var slot = this.plugin.Configuration.DeckWriteSlot;
+        if (writer.Active)
+        {
+            ImGui.TextColored(GoodColor, $"Writing: {writer.Status}");
+            ImGui.SameLine();
+            if (ImGui.SmallButton("Stop writing"))
+                writer.Stop("stopped by the player");
+            return;
+        }
+
+        if (best is not null && slot >= 0)
+        {
+            var current = this.plugin.Decks.Saved.FirstOrDefault(d => d.Index == slot);
+            if (ImGui.Button($"Write #1 to Deck {slot + 1}"))
+                this.writeError = this.plugin.StartDeckWrite(best);
+            ImGui.SameLine();
+            ImGui.TextColored(MutedColor, current is null ? "(empty slot)" : $"(replaces {current.Name}: {string.Join(", ", current.Cards.Select(c => c.Name))})");
+        }
+        else if (best is not null)
+        {
+            ImGui.TextColored(MutedColor, "Build #1 in a free deck slot, or allow a slot in Settings to have it written.");
+        }
+
+        if ((this.writeError ?? (writer.Status.Length > 0 ? writer.Status : null)) is { } status)
+            ImGui.TextColored(status.StartsWith("done", StringComparison.Ordinal) ? GoodColor : WarnColor, status);
     }
 
     private void DeckRow(string label, Core.Deck.DeckScore score, Vector4 color)
