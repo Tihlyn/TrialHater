@@ -76,6 +76,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
             try
             {
                 var data = GameData.Load(dataManager);
+                this.Session.TriadMenuText = data.TriadMenuText;
                 this.Data = data;
                 log.Information($"[Data] {data.Cards.Count} cards, {data.Npcs.Count} NPC decks, {data.NpcBaseToTriad.Count} NPCs, {data.RuleNames.Count} rules.");
             }

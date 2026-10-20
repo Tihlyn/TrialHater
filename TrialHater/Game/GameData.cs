@@ -12,8 +12,12 @@ public sealed class GameData
     // ENpcData values in this range are TripleTriad sheet rows (event handler type 0x23).
     private const uint TriadHandlerType = 0x23;
 
-    private GameData(CardCatalog cards, NpcCatalog npcs, Dictionary<uint, uint> npcBaseToTriad, Dictionary<TriadRule, string> ruleNames, List<RuleSet> tournamentRules)
+    // Addon sheet row of the NPC menu entry "Triple Triad Challenge" (2026-10-20).
+    private const uint TriadMenuTextRow = 9184;
+
+    private GameData(CardCatalog cards, NpcCatalog npcs, Dictionary<uint, uint> npcBaseToTriad, Dictionary<TriadRule, string> ruleNames, List<RuleSet> tournamentRules, string triadMenuText)
     {
+        this.TriadMenuText = triadMenuText;
         this.Cards = cards;
         this.Npcs = npcs;
         this.NpcBaseToTriad = npcBaseToTriad;
@@ -30,6 +34,10 @@ public sealed class GameData
 
     // Rule names in the client language, as the match windows print them.
     public IReadOnlyDictionary<TriadRule, string> RuleNames { get; }
+
+    // The NPC menu entry that starts a match, in the client language. Most menus also mark it with
+    // icon 71101-71104, but some (Kaizan, Gyoei) show no icons at all.
+    public string TriadMenuText { get; }
 
     // TripleTriadTournament rows 1..N (index 0 = row 1): the Open Tournament rotation.
     public IReadOnlyList<RuleSet> TournamentRules { get; }
@@ -138,6 +146,7 @@ public sealed class GameData
             tournamentRules.Add(RuleSet.Of(ids.Where(id => id is > 0 and <= (int)TriadRule.Draft).Select(id => (TriadRule)id)));
         }
 
-        return new GameData(new CardCatalog(cards), new NpcCatalog(decks), baseToTriad, ruleNames, tournamentRules);
+        var menuText = data.GetExcelSheet<Addon>().GetRowOrDefault(TriadMenuTextRow)?.Text.ExtractText() ?? string.Empty;
+        return new GameData(new CardCatalog(cards), new NpcCatalog(decks), baseToTriad, ruleNames, tournamentRules, menuText);
     }
 }

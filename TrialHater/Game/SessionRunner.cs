@@ -80,6 +80,9 @@ public sealed unsafe class SessionRunner
 
     public string Status { get; private set; } = "off";
 
+    // The "Triple Triad Challenge" text in the client language (GameData), for menus without icons.
+    public string TriadMenuText { get; set; } = string.Empty;
+
     // Set by the plugin each frame: the saved deck to pick (row and its five card ids), or why to
     // wait for it. Row -1 = the window's confirm button.
     public int DeckRow { get; set; } = -1;
@@ -270,7 +273,7 @@ public sealed unsafe class SessionRunner
                                         || speaker.Equals(this.NpcName, StringComparison.OrdinalIgnoreCase)),
             TalkKey = $"{this.Run("Talk", talk != null)}:{StringValue(talk, 0)}",
             MenuOpen = menu != null,
-            MenuTriadIndex = menu == null ? -1 : TriadMenuIndex(menu),
+            MenuTriadIndex = menu == null ? -1 : TriadMenuIndex(menu, this.TriadMenuText),
             MenuKey = this.Run("SelectIconString", menu != null).ToString(),
             YesNoOpen = yesNo != null,
             CanInteract = canInteract,
@@ -312,13 +315,21 @@ public sealed unsafe class SessionRunner
         return node != null && AddonOps.IsChainVisible(node, out _);
     }
 
-    // The NPC menu lists entries as (icon, text, flag) from AtkValues[6]; [5] is the count.
-    private static int TriadMenuIndex(AtkUnitBase* menu)
+    // The NPC menu lists entries as (icon, text, flag) from AtkValues[6]; [5] is the count. The Triad
+    // entry is the one with the Triad icon, or (menus without icons: Kaizan, Gyoei, 2026-10-20) the
+    // one with the Triad text.
+    private static int TriadMenuIndex(AtkUnitBase* menu, string triadText)
     {
         var count = IntValue(menu, 5);
         for (var i = 0; i < count && i < 16; i++)
         {
             if (IntValue(menu, 6 + (3 * i)) is >= TriadMenuIconFirst and <= TriadMenuIconLast)
+                return i;
+        }
+
+        for (var i = 0; i < count && i < 16 && triadText.Length > 0; i++)
+        {
+            if (StringValue(menu, 7 + (3 * i)).Equals(triadText, StringComparison.OrdinalIgnoreCase))
                 return i;
         }
 
