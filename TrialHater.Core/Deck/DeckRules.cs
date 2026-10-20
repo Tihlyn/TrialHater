@@ -7,8 +7,9 @@ public static class DeckRules
 {
     public const int Size = 5;
 
-    // The game's deck limits, as every lineage implementation has them (TriadBuddy TriadDeck.cs:117,
-    // Saucy, ATTG): at most one 5-star card, at most two cards of 4 stars or more, no card twice.
+    // The game's deck limits, as the deck editor prints them (GSInfoEditDeck [633], 2026-10-20) and
+    // every lineage implementation has them: at most one 5-star card, at most two cards of 4 stars
+    // or more, no card twice.
     public static string? Problem(IReadOnlyList<CardInfo> cards)
     {
         if (cards.Count != Size)

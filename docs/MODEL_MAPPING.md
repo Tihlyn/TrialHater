@@ -200,3 +200,34 @@ Tsuzura's Roulette never rolled Random or Order in 70 matches.
 ## Session 10: 2026-10-20 14:38-14:45 UTC, deck selection rows
 
 `TripleTriadSelDeck` row k is (valid, name, 5 x 88000 + card id) in stride 7 from `[2]`; k is the saved deck slot (`GoldSaucerModule.GetDeck(k)`). Clicking a row fires `ListItemClick` on list node 2, then callback `[k]`, and the window closes: there is no separate confirm. With Deck 2 empty, clicks on rows 1, 2 and 4 sent `[1]`, `[2]`, `[4]` and nothing happened. Once Deck 2 was built, `[1]` started the match, and the hand dealt was Deck 2's cards in slot order (9A17, 6967, 6576, 4782, 5468). The session sends `[k]` itself (`SessionRunner.PickDeck`), but only after checking that row k shows exactly the chosen deck's five ids.
+
+## Session 11: 2026-10-20 14:52-14:53 UTC, building a deck (Gold Saucer window)
+
+Recorded with `GoldSaucerInfo`, `GSInfoCardDeck`, `GSInfoEditDeck` and `ContextMenu` on the watchlist. The player built Deck 3, switched pages, replaced and removed cards, and saved. Every edit is one callback carrying plain values: card ids, not list positions.
+
+| Step | Window | Callback | Effect |
+|---|---|---|---|
+| Gold Saucer window opens on the Triple Triad deck tab | `GoldSaucerInfo` | `[0, 3, 125]` (sent by the game on open; 125 = the attached child, `GSInfoCardDeck`) | `GSInfoCardDeck` shows the decks |
+| Edit deck k | `GSInfoCardDeck` | `[5, k]` (`ListItemClick` on list node 2, row k) | opens `GSInfoEditDeck` for slot k (k = 2 for Deck 3) |
+| (editor setup) | `GSInfoEditDeck` | `[16, 0]` | sent by the game once on open |
+| Card list page | `GSInfoEditDeck` | `[7, page]` (0-based) | `[1]` = page; list redrawn |
+| Put a card in deck slot s | `GSInfoEditDeck` | `[11, s, card id]` (drag from the list; `DragDropInsert` on slot nodes 172-176) | slot filled; an occupied slot is replaced; a card already in the deck is refused silently (no refresh) |
+| Slot menu | `GSInfoEditDeck` | `[13, s]` (`DragDropClick` on the slot) | opens `ContextMenu` |
+| Remove the card | `ContextMenu` | `[0, 0, 0]` (first entry) | slot s emptied; `[0, -1, 0]` = menu dismissed |
+| Save | `GSInfoEditDeck` | `[10]` (`ButtonClick` param 38, node 180) | `GSInfoCardDeck` row k shows the new deck at once; `[631]` true -> false |
+| Close the editor | `GSInfoEditDeck` | `[17]`, then `[-2]` | |
+| Close the window | `GoldSaucerInfo` | `[-1]`, then `[-2]` | `GSInfoCardDeck` closes with it |
+
+**`GSInfoCardDeck` values** (71): `[0]` = 5 decks, then per deck (valid, name, 5 x 88000 + id) in stride 7 from `[1]`. This is the same layout as `TripleTriadSelDeck`, shifted by one.
+
+**`GSInfoEditDeck` values** (638):
+- `[1]` page, `[2]` owned card count (58), `[3]` "Total: 58".
+- The list shows owned cards only, 30 per page, in stride 17 from `[14]`: id, "No. n", name, 88000 + id, 87000 + id, packed sides, the four sides as text, stars, type, two flags, the acquisition icon, the acquisition text, a flag.
+- `[524]` deck name, then the 5 slots in stride 17 from `[525]`, with the same fields as the list plus an occupied flag at +13.
+- `[633]` prints the deck rules: "★★★★★: 1 card per deck, ★★★★ or more: 2 cards per deck, ★★★ or less: no limit". This confirms `DeckRules`.
+
+**Notes for automation:**
+- **Rarity limits:** the editor accepted a third 4★ card mid-edit (Great Gold Whisker, then Ultima Weapon and King Elmer III); the limits are presumably checked on save. The builder only produces legal decks.
+- **Page independence:** the placement callback carries the card id, and Ultima Weapon (No. 51, page 1) was placed while page 2 was showing. Placing a card should therefore not need its page. Verify this when automating.
+- **Opening the window:** ClientStructs has `AgentGoldSaucer` (Show/Hide). Whether opening it lands on the deck tab, as here, is still to see.
+
