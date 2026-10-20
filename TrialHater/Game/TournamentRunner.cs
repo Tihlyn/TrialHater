@@ -44,6 +44,7 @@ public sealed unsafe class TournamentRunner
     private readonly Action<string> log;
     private readonly Dictionary<string, DateTime> shownAt = new();
     private string currentKey = string.Empty;
+    private DateTime keySeenAt;
     private DateTime? actedAt;
     private int attempts;
     private uint officialBaseId;
@@ -116,15 +117,20 @@ public sealed unsafe class TournamentRunner
             return;
         }
 
+        // Window actions are keyed and settled by the window's appearance; Interact (no window) by
+        // the moment it became the next step.
         var window = WindowOf(action.Kind);
-        var since = window is null ? now : this.shownAt.GetValueOrDefault(window, now);
-        var key = $"{action.Kind}|{since:O}";
+        var shown = window is null ? (DateTime?)null : this.shownAt.GetValueOrDefault(window, now);
+        var key = $"{action.Kind}|{shown:O}";
         if (key != this.currentKey)
         {
             this.currentKey = key;
+            this.keySeenAt = now;
             this.actedAt = null;
             this.attempts = 0;
         }
+
+        var since = shown ?? this.keySeenAt;
 
         var settle = action.Kind == TournamentActionKind.CloseResult ? ResultSettle : TimeSpan.FromMilliseconds(Math.Max(delayMs, Settle.TotalMilliseconds));
         if (now - since < settle)
