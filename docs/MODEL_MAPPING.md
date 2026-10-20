@@ -231,3 +231,21 @@ Recorded with `GoldSaucerInfo`, `GSInfoCardDeck`, `GSInfoEditDeck` and `ContextM
 - **Page independence:** the placement callback carries the card id, and Ultima Weapon (No. 51, page 1) was placed while page 2 was showing. Placing a card should therefore not need its page. Verify this when automating.
 - **Opening the window:** ClientStructs has `AgentGoldSaucer` (Show/Hide). Whether opening it lands on the deck tab, as here, is still to see.
 
+## Session 12: 2026-10-20 15:01-15:09 UTC, first deck-writer run, Open Tournament (Draft, NPCs only)
+
+**Deck writer.** `AgentGoldSaucer.Show` opened the Gold Saucer window directly on the Triple Triad deck tab (the game sent `[0, 3, 125]` itself), and `[5, 4]` opened Deck 5 in the editor. Both later steps failed, because **the editor ignores the slot argument of its callbacks**:
+- **Removing:** `[13, 4]` (sent as a bare callback) opened the slot menu, but its "Remove from Deck" `[0, 0, 0]` emptied slot 1, not slot 5.
+- **Placing:** `[11, 0, 252]` filled slot 1, then `[11, 1, 447]` overwrote slot 1 again. The writer saw slot 1 wrong again and looped until stopped.
+
+In the manual capture (session 11), each drop was preceded by `FocusStart` events on node 4 with param = slot + 1 (twice), then the list item. The removal menu came from a real `DragDropClick` on the slot node (172 + slot). The editor's "current slot" is therefore set by UI events, not by the callback values. To be tested with Cartographer's operator (`/fire`, `/click`) before the writer is changed.
+
+**Tournament.** The tournament had 8 entrants, all NPCs. Results:
+- **Placement:** won all 3 matches (6, 6, 7 cards), all auto-played, finishing 1st with 6 points and 4 captures.
+- **Deck memory:** recorded 5/5 cards for each opponent; nobody was met twice.
+- **Anti-AFK:** pressed twice between rounds, at the ~30 s idle mark; the counters fell to 1 s both times (first live confirmation of IdleGuard in a duty).
+
+On the final ranking (`TripleTriadTournamentResult`):
+- **View deck:** sends `[4, i]` for the player in row i and opens `TripleTriadDeckConfirmation` with that deck ("<name>'s Deck" at `[26]`, cards as 87000 + id). The results values already hold every deck as 88000 + id, so this adds nothing for the plugin.
+- **Closing:** `[3, 0]` was sent once (ButtonClick node 25, probably character details), and closing sent `[2, false]` and then `[0, false]` on the reward window.
+- **No pre-match view:** no deck view has been seen before a match (the match list offers none).
+
