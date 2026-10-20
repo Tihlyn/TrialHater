@@ -272,3 +272,8 @@ Tested with Cartographer's operator on an open Deck 5 editor, with the GoldSauce
 
 Cartographer gained a `null` value token for `/callback` (an Undefined AtkValue) for these tests.
 
+## Session 14: 2026-10-20 15:31-15:41 UTC, Kaizan and Gyoei menus
+
+- **Menu without icons.** At Kaizan and Gyoei, `SelectIconString` lists "Triple Triad Challenge", "Small Talk" and "Nothing" with icon 0 each (`[6 + 3i]`). The session now also matches the entry by its text, which is `Addon` sheet row 9184 in the client language.
+- **Talk without a click handler.** Gyoei's Talk window registers no `MouseClick` on any node: only window and input events on the root (node 1). A real click arrives as MouseDown/MouseUp on a collision node, and the window then sends an **empty callback `[]` with the flag set** and closes. A synthetic MouseClick on node 1 did nothing. The empty callback, sent through the operator, advanced the dialog to `TripleTriadRequest`. The session sends it when the window has no click handler.
+

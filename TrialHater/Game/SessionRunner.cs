@@ -204,7 +204,7 @@ public sealed unsafe class SessionRunner
         SessionActionKind.DeclineRequest => AddonOps.ActivateButton(this.Addon("TripleTriadRequest"), RequestQuitNode),
         SessionActionKind.ConfirmDeck when action.Index >= 0 => this.PickDeck(action.Index),
         SessionActionKind.ConfirmDeck => AddonOps.ActivateButton(this.Addon("TripleTriadSelDeck"), DeckConfirmNode),
-        SessionActionKind.AdvanceTalk => AddonOps.Click(this.Addon("Talk")),
+        SessionActionKind.AdvanceTalk => this.AdvanceTalk(),
         SessionActionKind.ChooseMenu => AddonOps.Callback(this.Addon("SelectIconString"), true, action.Index),
         SessionActionKind.Interact => this.Interact(),
         _ => DispatchResult.Refused($"nothing to do for {action.Kind}"),
@@ -222,6 +222,16 @@ public sealed unsafe class SessionRunner
         if (!shown.SequenceEqual(this.DeckCards.Select(id => (int)id)))
             return DispatchResult.Refused($"row {row} shows cards {string.Join(",", shown)}, not the chosen deck {string.Join(",", this.DeckCards)}");
         return AddonOps.Callback(addon, true, row);
+    }
+
+    // Most Talk windows advance on a MouseClick their collision node registered. Some (Gyoei,
+    // 2026-10-20) register none: there a real click sends an empty callback [] (flag set) and the
+    // window closes, so that is sent instead.
+    private DispatchResult AdvanceTalk()
+    {
+        var talk = this.Addon("Talk");
+        var click = AddonOps.Click(talk);
+        return click.Sent || !AddonOps.CanReceiveInput(talk, out _) ? click : AddonOps.Callback(talk, true);
     }
 
     private DispatchResult Interact()
