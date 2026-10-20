@@ -1,3 +1,4 @@
+using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.Command;
 using Dalamud.Interface.Windowing;
 using Dalamud.Plugin;
@@ -7,6 +8,7 @@ using FFXIVClientStructs.FFXIV.Component.GUI;
 using TrialHater.Core.Cards;
 using TrialHater.Core.Policy;
 using TrialHater.Core.Search;
+using TrialHater.Core.Session;
 using TrialHater.Game;
 using TrialHater.Windows;
 
@@ -24,6 +26,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
     private readonly IFramework framework;
     private readonly ITargetManager targets;
     private readonly IObjectTable objects;
+    private readonly ICondition condition;
     private readonly ModelProbe probe;
     private readonly MatchJournal journal;
     private long frameCounter;
@@ -46,12 +49,15 @@ public sealed unsafe class Plugin : IDalamudPlugin
         this.framework = framework;
         this.targets = targets;
         this.objects = objects;
+        this.condition = condition;
         this.Log = log;
 
         this.Configuration = Configuration.Load(pluginInterface);
         this.Analysis = new AnalysisService((ex, msg) => log.Error(ex, msg));
         this.AutoPlayer = new AutoPlayer(msg => log.Information(msg)) { Enabled = this.Configuration.AutoPlay };
         this.Session = new SessionRunner(gameGui, targets, objects, condition, msg => log.Information(msg));
+        this.IdleGuard = new IdleGuard(msg => log.Information(msg), IdleInput.ReadGameTimers, IdleInput.FindGameWindow,
+            IdleInput.SendControl, IdleInput.ControlHeld) { Enabled = this.Configuration.AntiIdle };
         this.probe = new ModelProbe(Path.Combine(pluginInterface.GetPluginConfigDirectory(), "model_probe.jsonl"));
         this.journal = new MatchJournal(pluginInterface.GetPluginConfigDirectory(), (ex, msg) => log.Warning(ex, msg));
         this.Tracker.Event += this.OnTrackerEvent;
@@ -76,7 +82,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
 
         this.WindowSystem = new WindowSystem("TrialHater");
         this.MainWindow = new MainWindow(this);
-        this.ConfigWindow = new ConfigWindow(this.Configuration);
+        this.ConfigWindow = new ConfigWindow(this.Configuration, this.IdleGuard);
         this.WindowSystem.AddWindow(this.MainWindow);
         this.WindowSystem.AddWindow(this.ConfigWindow);
         this.MainWindow.IsOpen = this.Configuration.ShowOverlay;
@@ -109,6 +115,8 @@ public sealed unsafe class Plugin : IDalamudPlugin
 
     public SessionRunner Session { get; }
 
+    public IdleGuard IdleGuard { get; }
+
     public WindowSystem WindowSystem { get; }
 
     public MainWindow MainWindow { get; }
@@ -120,6 +128,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
     public void Dispose()
     {
         this.framework.Update -= this.OnFrameworkUpdate;
+        this.IdleGuard.Reset();
         this.Tracker.Event -= this.OnTrackerEvent;
         this.Tracker.RedMoved -= this.journal.RedMoved;
         this.Tracker.MatchEnded -= this.OnMatchEnded;
@@ -151,7 +160,10 @@ public sealed unsafe class Plugin : IDalamudPlugin
     {
         this.frameCounter++;
         if (this.Data is not { } data)
+        {
+            this.IdleGuard.Tick(false, false, DateTime.UtcNow);
             return;
+        }
 
         var board = this.Addon(BoardReader.AddonName);
         var frame = board == null ? null : BoardReader.Read(board, this.frameCounter, this.objects.LocalPlayer?.Name.TextValue);
@@ -166,8 +178,15 @@ public sealed unsafe class Plugin : IDalamudPlugin
         else if (!this.Tracker.InMatch && this.Analysis.Latest is not null)
             this.Analysis.Clear();
 
-        this.AutoPlayer.Tick(this.Tracker, this.Analysis.Latest, this.Configuration.PlaceDelayMs, DateTime.UtcNow,
-            (slot, cell) => BoardActuator.PlaceCard(this.Addon(BoardReader.AddonName), slot, cell));
+        // Automation acts first and the anti-idle press goes last, so a synthetic keystroke never
+        // lands in the moments before a dispatch; automation stands aside while it is held.
+        var blocked = this.IdleGuard.BlocksAutomation;
+        if (!blocked)
+        {
+            this.AutoPlayer.Tick(this.Tracker, this.Analysis.Latest, this.Configuration.PlaceDelayMs, DateTime.UtcNow,
+                (slot, cell) => BoardActuator.PlaceCard(this.Addon(BoardReader.AddonName), slot, cell));
+        }
+
         if (this.Configuration.AutoPlay != this.AutoPlayer.Enabled)
         {
             // The auto player switches itself off on repeated failures; keep the setting in step.
@@ -177,8 +196,15 @@ public sealed unsafe class Plugin : IDalamudPlugin
 
         if (this.Session.Active && !this.AutoPlayer.Enabled)
             this.Session.Stop("auto play is off");
-        this.Session.Tick(DateTime.UtcNow, this.Configuration.SessionDelayMs,
-            baseId => data.NpcBaseToTriad.TryGetValue(baseId, out var triad) && triad == this.Session.NpcTriadId);
+        if (!blocked)
+        {
+            this.Session.Tick(DateTime.UtcNow, this.Configuration.SessionDelayMs,
+                baseId => data.NpcBaseToTriad.TryGetValue(baseId, out var triad) && triad == this.Session.NpcTriadId);
+        }
+
+        // In a duty the inactivity kick also runs between matches (tournament rounds, queues).
+        var inDuty = this.condition[ConditionFlag.BoundByDuty] || this.condition[ConditionFlag.BoundByDuty56] || this.condition[ConditionFlag.BoundByDuty95];
+        this.IdleGuard.Tick(this.AutoPlayer.Enabled, this.Tracker.InMatch || this.Session.Active || inDuty, DateTime.UtcNow);
     }
 
     // Farms the NPC we are facing: the one in the current match, else the current target, else

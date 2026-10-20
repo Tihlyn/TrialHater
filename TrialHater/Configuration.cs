@@ -35,6 +35,10 @@ public sealed class Configuration : IPluginConfiguration
 
     public int SessionDelayMs { get; set; } = 1200;
 
+    // Read the game's idle counters and send a brief Control press while auto play runs
+    // unattended, so a duty (Open Tournament, Battlehall) does not eject us for inactivity.
+    public bool AntiIdle { get; set; } = true;
+
     // Raw dumps of the game's own Triple Triad model at every turn, for mapping it
     // (pluginConfigs/TrialHater/model_probe.jsonl).
     public bool ModelProbe { get; set; }

@@ -11,6 +11,8 @@ Private Dalamud plugin (API 15, .NET 10) automating Triple Triad against NPCs. R
 - `TrialHater.Core` — no Dalamud references, ever. `Engine/` (make/unmake rules engine), `Search/` (exact solver, exploit evaluator, opponent models), `Belief/` (NPC hand hypotheses), `Policy/` (decision), `Match/` (MatchView: the plain observation).
 - `TrialHater/Game` — `GameData` (Lumina sheets), `BoardReader` (addon → BoardFrame copy), `MatchTracker` (frames → MatchView, history), `AnalysisService` (worker), `BoardActuator` (callback 14), `AutoPlayer` (guards), `SessionRunner` + `AddonOps` (farming windows via native ButtonClick chains), `MatchJournal` (matches.csv, npc_moves.jsonl), `ModelProbe` (per-event dumps).
 - `TrialHater.Core/Session/SessionPlanner` — pure "which window is up → one action" logic for the session.
+- `TrialHater.Core/Session/IdleGuard` — anti-AFK Control press while auto play runs unattended (match, session, duty), ported from MahjongHater; native seams in `TrialHater/Game/IdleInput`.
+- The dev loader hot-reloads `TrialHater.dll` whenever it is rebuilt: while the user is playing, compile-check the plugin with `-o` into the scratchpad instead.
 - `tools/ProbeReplay` — replays every match in `pluginConfigs/TrialHater/model_probe.jsonl` through the engine; run after play sessions (`dotnet run --project tools/ProbeReplay -c Release`).
 - `docs/RESEARCH.md` is the decision record; `docs/RULES.md` lists every rule point and its verification status.
 

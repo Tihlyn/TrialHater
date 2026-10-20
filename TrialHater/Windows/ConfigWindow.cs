@@ -1,18 +1,21 @@
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Windowing;
+using TrialHater.Core.Session;
 
 namespace TrialHater.Windows;
 
 public sealed class ConfigWindow : Window
 {
     private readonly Configuration configuration;
+    private readonly IdleGuard idleGuard;
 
-    public ConfigWindow(Configuration configuration)
+    public ConfigWindow(Configuration configuration, IdleGuard idleGuard)
         : base("TrialHater settings###TrialHaterConfig")
     {
         this.configuration = configuration;
-        this.Size = new Vector2(420, 260);
+        this.idleGuard = idleGuard;
+        this.Size = new Vector2(420, 320);
         this.SizeCondition = ImGuiCond.FirstUseEver;
     }
 
@@ -58,6 +61,21 @@ public sealed class ConfigWindow : Window
             c.PlaceDelayMs = delay;
             changed = true;
         }
+
+        var antiIdle = this.idleGuard.Enabled;
+        if (ImGui.Checkbox("Prevent inactivity ejection during auto play", ref antiIdle))
+        {
+            this.idleGuard.Enabled = antiIdle;
+            this.idleGuard.Reset();
+            c.AntiIdle = antiIdle;
+            changed = true;
+        }
+
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("While auto play runs a match, a session or a duty (Open Tournament, Battlehall), sends a brief\nControl press to the game window when its idle counters exceed 30 seconds.");
+        ImGui.TextDisabled($"Anti-AFK: {this.idleGuard.Status} ({this.idleGuard.NudgesThisSession} presses)");
+        if (this.idleGuard.LastNudgeObservedReset == false)
+            ImGui.TextColored(new Vector4(1f, 0.6f, 0.2f, 1f), "Last press did not reduce the idle counters");
 
         ImGui.Separator();
         var probe = c.ModelProbe;
