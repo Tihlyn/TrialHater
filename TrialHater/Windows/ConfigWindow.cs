@@ -91,6 +91,16 @@ public sealed class ConfigWindow : Window
             changed = true;
         }
 
+        var autoDraft = c.AutoDraft;
+        if (ImGui.Checkbox("Draft the advised deck in Open Tournaments", ref autoDraft))
+        {
+            c.AutoDraft = autoDraft;
+            changed = true;
+        }
+
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("With auto play on, presses the draft advisor's option of each pick and confirms the deck,\nbut only if the confirmation shows exactly the advised deck.");
+
         var antiIdle = this.idleGuard.Enabled;
         if (ImGui.Checkbox("Prevent inactivity ejection during auto play", ref antiIdle))
         {

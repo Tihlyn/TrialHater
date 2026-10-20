@@ -222,7 +222,8 @@ public sealed unsafe class Plugin : IDalamudPlugin
         if (!blocked)
             this.DeckWriter.Tick(DateTime.UtcNow);
         this.CheckWrittenDeck(data);
-        this.Draft.Tick(data, DateTimeOffset.UtcNow, this.AutoPlayer.Enabled && !blocked);
+        this.Draft.Tick(data, DateTimeOffset.UtcNow, this.AutoPlayer.Enabled && !blocked,
+            this.AutoPlayer.Enabled && !blocked && this.Configuration.AutoDraft);
         if (this.Draft.OfferGeneration != this.draftGeneration)
         {
             // A new draft: a new tournament, with new decks for everyone.

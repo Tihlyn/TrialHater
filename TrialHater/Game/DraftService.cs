@@ -17,6 +17,15 @@ public sealed unsafe class DraftService : IDisposable
     private const string ResultAddon = "TripleTriadTournamentResult";
     private const string ConfirmAddon = "TripleTriadDeckConfirmation";
     private const string ReportAddon = "TripleTriadTournamentMLReport";
+
+    // Draft buttons (2026-10-20, sessions 15-16): pick p, choice c is node 11 + 14p + c (it sends
+    // [3, p, c]); "done" is node 48 ([2], opens the confirmation); the confirmation's OK is node 14.
+    private const uint FirstOptionNode = 11;
+    private const uint PickNodeStride = 14;
+    private const uint DoneNode = 48;
+    private const uint ConfirmOkNode = 14;
+    private static readonly TimeSpan DraftSettle = TimeSpan.FromSeconds(1.5);
+    private static readonly TimeSpan DraftGap = TimeSpan.FromMilliseconds(700);
     private const uint ReportOkNode = 7;
     private static readonly TimeSpan ReportDelay = TimeSpan.FromSeconds(2);
 
@@ -46,6 +55,11 @@ public sealed unsafe class DraftService : IDisposable
     private DateTimeOffset? reportSeen;
     private bool reportPressed;
 
+    // Auto draft: picks pressed so far (0-3), then 4 = done pressed, 5 = confirmed, -1 = stopped.
+    private int draftStep;
+    private DateTimeOffset draftShownAt;
+    private DateTimeOffset nextDraftAction;
+
     public DraftService(Dalamud.Plugin.Services.IGameGui gameGui, string configFolder, Action<string> log)
     {
         this.gameGui = gameGui;
@@ -73,13 +87,16 @@ public sealed unsafe class DraftService : IDisposable
     // (empty when the deck is the advised one), or null when there is nothing to compare.
     public IReadOnlyList<(CardInfo Picked, CardInfo Advised)>? ConfirmDiff { get; private set; }
 
-    public void Tick(GameData data, DateTimeOffset now, bool autoPlay)
+    // `autoDraft`: take the advised options and confirm (auto play on and the setting on).
+    public void Tick(GameData data, DateTimeOffset now, bool autoPlay, bool autoDraft)
     {
         this.RecordResults(now);
         if (autoPlay)
             this.ConfirmReport(now);
         var draft = this.Ready(DraftAddon);
         this.CompareConfirmation(data, draft != null);
+        if (draft != null && autoDraft)
+            this.AutoDraft(draft, now);
         if (draft == null)
             return;
         var ids = Enumerable.Range(0, 15).Select(k => AddonOps.IntValue(draft, OfferBase + (OfferStride * k)) - OfferIconBase).ToList();
@@ -90,6 +107,8 @@ public sealed unsafe class DraftService : IDisposable
             return;
         this.offerKey = key;
         this.OfferGeneration++;
+        this.draftStep = 0;
+        this.draftShownAt = now;
         var offer = ids.Select(id => data.Cards.Get((ushort)id)).OfType<CardInfo>().ToList();
         if (offer.Count != 15)
         {
@@ -124,6 +143,75 @@ public sealed unsafe class DraftService : IDisposable
 
         this.ConfirmDiff = picked.Select(p => (Picked: p!, Advised: advice.Picks.First(a => a.Stars == p!.Stars)))
             .Where(x => x.Picked.Id != x.Advised.Id).ToList();
+    }
+
+    // Presses the advised option of each pick, then "done", then - only if the confirmation shows
+    // exactly the advised deck - OK. Clicks leave no trace in the draft window's values, so the
+    // confirmation is the check; on a mismatch the plugin stops and leaves the deck to the player.
+    private void AutoDraft(AtkUnitBase* draft, DateTimeOffset now)
+    {
+        if (this.draftStep is < 0 or >= 5 || this.Running || this.Advice is not { Best.Count: 3 } advice || now < this.nextDraftAction
+            || now - this.draftShownAt < DraftSettle)
+            return;
+
+        if (this.draftStep < 3)
+        {
+            var option = advice.Best[this.draftStep];
+            var node = FirstOptionNode + (PickNodeStride * (uint)option.Pick) + (uint)option.Choice;
+            var result = AddonOps.ActivateButton(draft, node);
+            this.nextDraftAction = now + DraftGap;
+            if (!result.Sent)
+            {
+                this.StopDraft($"pick {option.Pick + 1}: {result.Detail}");
+                return;
+            }
+
+            this.log($"[Draft] pick {option.Pick + 1}: {string.Join(" + ", option.Cards.Select(c => c.Name))} ({result.Detail})");
+            this.draftStep++;
+            return;
+        }
+
+        if (this.draftStep == 3)
+        {
+            var result = AddonOps.ActivateButton(draft, DoneNode);
+            this.nextDraftAction = now + DraftGap;
+            if (!result.Sent)
+            {
+                this.StopDraft($"done button: {result.Detail}");
+                return;
+            }
+
+            this.draftStep = 4;
+            return;
+        }
+
+        // Step 4: the confirmation window.
+        var confirm = this.Ready(ConfirmAddon);
+        if (this.ConfirmDiff is not { } diff || confirm == null)
+            return;
+        if (diff.Count > 0)
+        {
+            this.StopDraft($"the deck to confirm differs from the advice ({string.Join(", ", diff.Select(d => $"{d.Picked.Name} instead of {d.Advised.Name}"))}); confirm it yourself");
+            return;
+        }
+
+        var ok = AddonOps.ActivateButton(confirm, ConfirmOkNode);
+        if (!ok.Sent)
+        {
+            this.StopDraft($"confirm button: {ok.Detail}");
+            return;
+        }
+
+        this.draftStep = 5;
+        this.Status = $"drafted the advised deck: {string.Join(", ", advice.Picks.Select(c => $"{c.Name} {c.Stars}*"))}";
+        this.log($"[Draft] {this.Status}");
+    }
+
+    private void StopDraft(string why)
+    {
+        this.draftStep = -1;
+        this.Status = $"auto draft stopped: {why}";
+        this.log($"[Draft] {this.Status}");
     }
 
     // After each tournament match a report ("Round 2", "DRAW", "Points +1 Captures +0") waits for

@@ -51,6 +51,9 @@ public sealed class Configuration : IPluginConfiguration
     // DeckWriteSlot when it is new and clearly better than the saved decks (needs SessionPicksDeck).
     public bool SessionBuildsDeck { get; set; }
 
+    // Open Tournament: with auto play on, take the draft advisor's options and confirm the deck.
+    public bool AutoDraft { get; set; } = true;
+
     // Raw dumps of the game's own Triple Triad model at every turn, for mapping it
     // (pluginConfigs/TrialHater/model_probe.jsonl).
     public bool ModelProbe { get; set; }
