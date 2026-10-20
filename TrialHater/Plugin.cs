@@ -66,6 +66,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
         this.DeckChooser = new SessionDeckChooser(msg => log.Information(msg));
         this.DeckWriter = new DeckWriter(gameGui, msg => log.Information(msg));
         this.DeckPrep = new SessionDeckPrep(msg => log.Information(msg));
+        this.Draft = new DraftService(gameGui, pluginInterface.GetPluginConfigDirectory(), msg => log.Information(msg));
         this.Tracker.Event += this.OnTrackerEvent;
         this.Tracker.RedMoved += this.journal.RedMoved;
         this.Tracker.MatchEnded += this.OnMatchEnded;
@@ -132,6 +133,8 @@ public sealed unsafe class Plugin : IDalamudPlugin
 
     public SessionDeckPrep DeckPrep { get; }
 
+    public DraftService Draft { get; }
+
     public WindowSystem WindowSystem { get; }
 
     public MainWindow MainWindow { get; }
@@ -147,6 +150,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
         this.Decks.Dispose();
         this.DeckChooser.Dispose();
         this.DeckPrep.Dispose();
+        this.Draft.Dispose();
         this.Tracker.Event -= this.OnTrackerEvent;
         this.Tracker.RedMoved -= this.journal.RedMoved;
         this.Tracker.MatchEnded -= this.OnMatchEnded;
@@ -217,6 +221,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
         if (!blocked)
             this.DeckWriter.Tick(DateTime.UtcNow);
         this.CheckWrittenDeck(data);
+        this.Draft.Tick(data, DateTimeOffset.UtcNow);
         if (this.DeckPrep.Running && !this.Session.Active)
             this.DeckPrep.Cancel();
         this.DeckPrep.Tick(this.DeckWriter, this.DeckChooser);

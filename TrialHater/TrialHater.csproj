@@ -43,6 +43,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Drafted decks seen in past Open Tournaments: the draft advisor's picture of the field. -->
+    <EmbeddedResource Include="..\research\data\draft-decks.csv" LogicalName="draft-decks.csv" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Update="TrialHater.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

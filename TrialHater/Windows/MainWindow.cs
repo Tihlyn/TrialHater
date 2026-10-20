@@ -45,6 +45,7 @@ public sealed class MainWindow : Window
         this.DrawHeader();
         this.DrawSession();
         this.DrawDeckBuilder();
+        this.DrawDraft();
         this.DrawTournaments();
         var tracker = this.plugin.Tracker;
         if (tracker.View is not { } view)
@@ -247,6 +248,55 @@ public sealed class MainWindow : Window
 
     private static bool SameCards(IReadOnlyList<Core.Cards.CardInfo> a, IReadOnlyList<Core.Cards.CardInfo> b)
         => a.Select(c => c.Id).Order().SequenceEqual(b.Select(c => c.Id).Order());
+
+    // Open Tournament draft: the best card of each rarity among the offered ones (you click them).
+    private void DrawDraft()
+    {
+        var draft = this.plugin.Draft;
+        if (draft.Offer.Count == 0 || !ImGui.CollapsingHeader("Draft advisor", ImGuiTreeNodeFlags.DefaultOpen))
+            return;
+        ImGui.TextColored(MutedColor, $"Tournament rules: {string.Join(", ", draft.Rules.Rules.Select(this.RuleName))}");
+        if (draft.Running || draft.Advice is not { } advice)
+        {
+            ImGui.TextColored(draft.Running ? GoodColor : WarnColor, draft.Status);
+            return;
+        }
+
+        if (advice.Picks.Count == 0)
+        {
+            ImGui.TextColored(WarnColor, advice.Status);
+            return;
+        }
+
+        var best = advice.Ranked[0];
+        ImGui.TextUnformatted($"Best deck: {best.Expected:+0.00;-0.00;0.00} per game ({best.Win:P0} wins, {best.Loss:P0} losses in simulation)");
+        if (!ImGui.BeginTable("draft", 4, ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingStretchProp))
+            return;
+        ImGui.TableSetupColumn("Rarity", ImGuiTableColumnFlags.WidthFixed, 50);
+        ImGui.TableSetupColumn("Pick");
+        ImGui.TableSetupColumn("Other");
+        ImGui.TableSetupColumn("Other ");
+        ImGui.TableHeadersRow();
+        for (var stars = 5; stars >= 1; stars--)
+        {
+            var pick = advice.Picks.First(c => c.Stars == stars);
+            ImGui.TableNextRow();
+            ImGui.TableNextColumn();
+            ImGui.TextUnformatted($"{stars}*");
+            ImGui.TableNextColumn();
+            ImGui.TextColored(GoodColor, $"{pick.Name} [{pick.Stats}]");
+            foreach (var other in draft.Offer.Where(c => c.Stars == stars && c.Id != pick.Id).Take(2))
+            {
+                ImGui.TableNextColumn();
+                var value = advice.CardValue.GetValueOrDefault(other.Id);
+                ImGui.TextColored(MutedColor, $"{other.Name} [{other.Stats}] {value - best.Expected:+0.00;-0.00;0.00}");
+            }
+        }
+
+        ImGui.EndTable();
+        ImGui.TextColored(MutedColor, "Others: best deck with that card instead, compared with the best deck.");
+        ImGui.TextColored(MutedColor, advice.Status);
+    }
 
     // The next Open Tournaments (Gold Saucer), computed from the sheet rotation, in local time.
     private void DrawTournaments()
