@@ -65,6 +65,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
         this.Decks = new DeckService((ex, msg) => log.Error(ex, msg));
         this.DeckChooser = new SessionDeckChooser(msg => log.Information(msg));
         this.DeckWriter = new DeckWriter(gameGui, msg => log.Information(msg));
+        this.DeckPrep = new SessionDeckPrep(msg => log.Information(msg));
         this.Tracker.Event += this.OnTrackerEvent;
         this.Tracker.RedMoved += this.journal.RedMoved;
         this.Tracker.MatchEnded += this.OnMatchEnded;
@@ -128,6 +129,8 @@ public sealed unsafe class Plugin : IDalamudPlugin
 
     public DeckWriter DeckWriter { get; }
 
+    public SessionDeckPrep DeckPrep { get; }
+
     public WindowSystem WindowSystem { get; }
 
     public MainWindow MainWindow { get; }
@@ -142,6 +145,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
         this.IdleGuard.Reset();
         this.Decks.Dispose();
         this.DeckChooser.Dispose();
+        this.DeckPrep.Dispose();
         this.Tracker.Event -= this.OnTrackerEvent;
         this.Tracker.RedMoved -= this.journal.RedMoved;
         this.Tracker.MatchEnded -= this.OnMatchEnded;
@@ -212,6 +216,10 @@ public sealed unsafe class Plugin : IDalamudPlugin
         if (!blocked)
             this.DeckWriter.Tick(DateTime.UtcNow);
         this.CheckWrittenDeck(data);
+        if (this.DeckPrep.Running && !this.Session.Active)
+            this.DeckPrep.Cancel();
+        this.DeckPrep.Tick(this.DeckWriter, this.DeckChooser);
+        this.Session.Preparing = this.Session.Active ? this.DeckPrep.Pending : null;
 
         var pickDeck = this.Configuration.SessionPicksDeck;
         this.Session.DeckRow = pickDeck ? this.DeckChooser.Row : -1;
@@ -237,9 +245,34 @@ public sealed unsafe class Plugin : IDalamudPlugin
             return "target a Triple Triad NPC first";
         this.SetAutoPlay(true);
         this.Session.Start(npc.TriadId, npc.Name, this.Configuration.SessionMaxMatches);
-        if (this.Configuration.SessionPicksDeck)
+        if (!this.Configuration.SessionPicksDeck)
+            return null;
+
+        // Building opens the Gold Saucer window: only from a clean start, before the NPC's menu or
+        // any Triad window is up.
+        var cleanStart = !this.Tracker.InMatch && !new[] { RequestAddon, "TripleTriadSelDeck", ResultAddon, "Talk", "SelectIconString" }.Any(this.IsVisible);
+        if (this.Configuration.SessionBuildsDeck && this.Configuration.DeckWriteSlot >= 0 && cleanStart && !this.DeckWriter.Active)
+            this.PrepareSessionDeck(data, npc);
+        else
             this.ChooseSessionDeck(data, npc);
         return null;
+    }
+
+    // Builds the best deck against the session NPC first (SessionDeckPrep), then plays it.
+    private void PrepareSessionDeck(GameData data, NpcDeck npc)
+    {
+        var owned = Collection.Owned(data.Cards);
+        if (owned.Count < 5)
+        {
+            this.Log.Information("[Deck] session: could not read the card collection; picking among the saved decks");
+            this.ChooseSessionDeck(data, npc);
+            return;
+        }
+
+        var history = this.journal.RulesHistory(npc.TriadId);
+        var (rules, _) = DeckRules.ExpectedRules(npc, history);
+        this.DeckPrep.Start(npc, rules, history.Count == 0, owned, Collection.SavedDecks(data.Cards), data.Cards,
+            this.Configuration.DeckWriteSlot, () => this.ChooseSessionDeck(data, npc));
     }
 
     // Ranks the saved decks against the session NPC under the rules its recorded matches had.

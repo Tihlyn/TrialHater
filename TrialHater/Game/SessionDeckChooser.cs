@@ -111,6 +111,14 @@ public sealed class SessionDeckChooser : IDisposable
         }, token);
     }
 
+    // Take a deck decided elsewhere (the session's deck building), without ranking.
+    public void Use(SavedDeck deck, string why, bool sheetRulesOnly)
+    {
+        this.Cancel();
+        this.SheetRulesOnly = sheetRulesOnly;
+        this.Choose(deck, why);
+    }
+
     public void Cancel()
     {
         this.cancel?.Cancel();

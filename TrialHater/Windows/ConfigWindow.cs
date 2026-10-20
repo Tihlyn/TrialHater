@@ -72,6 +72,16 @@ public sealed class ConfigWindow : Window
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip("At session start the saved decks are ranked against the NPC (as in the deck builder),\nand the best one is picked in the deck window. Off: the window's confirm button.");
 
+        var buildDeck = c.SessionBuildsDeck;
+        if (ImGui.Checkbox("Sessions build the best deck first", ref buildDeck))
+        {
+            c.SessionBuildsDeck = buildDeck;
+            changed = true;
+        }
+
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip($"Before talking to the NPC, a session searches the best deck from your collection and writes it\ninto the slot below when it is not saved yet and beats your saved decks by {Game.SessionDeckPrep.WriteMargin:0.00} or more.\nNeeds 'Sessions pick the best saved deck' and a slot.");
+
         var writeSlot = c.DeckWriteSlot + 1;
         string[] slots = ["None", "Deck 1", "Deck 2", "Deck 3", "Deck 4", "Deck 5"];
         ImGui.SetNextItemWidth(120);

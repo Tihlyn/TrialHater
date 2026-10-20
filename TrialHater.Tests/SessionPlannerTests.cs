@@ -34,6 +34,14 @@ public class SessionPlannerTests
     }
 
     [Fact]
+    public void WaitsForTheDeckToBeBuiltBeforeTalkingToTheNpc()
+    {
+        Assert.Equal(SessionActionKind.Wait, Next(new SessionSnapshot { CanInteract = true, Preparing = "building" }));
+        // A match window that is already up still gets its action.
+        Assert.Equal(SessionActionKind.Rematch, Next(new SessionSnapshot { ResultOpen = true, Preparing = "building" }, done: 1));
+    }
+
+    [Fact]
     public void QuitsWhenTheGoalIsReached()
     {
         Assert.Equal(SessionActionKind.Quit, Next(new SessionSnapshot { ResultOpen = true }, done: 3));

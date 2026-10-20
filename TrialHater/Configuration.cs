@@ -47,6 +47,10 @@ public sealed class Configuration : IPluginConfiguration
     // -1 = none. The player's other decks are never written.
     public int DeckWriteSlot { get; set; } = 4;
 
+    // Before a session talks to its NPC, build the best deck from the collection into
+    // DeckWriteSlot when it is new and clearly better than the saved decks (needs SessionPicksDeck).
+    public bool SessionBuildsDeck { get; set; }
+
     // Raw dumps of the game's own Triple Triad model at every turn, for mapping it
     // (pluginConfigs/TrialHater/model_probe.jsonl).
     public bool ModelProbe { get; set; }

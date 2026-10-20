@@ -23,6 +23,10 @@ public sealed record SessionSnapshot
 
     public string? DeckPending { get; init; }
 
+    // Why the session must not start yet (its deck is being built): it waits before talking to the
+    // NPC. Match windows still get their actions.
+    public string? Preparing { get; init; }
+
     public bool RequestOpen { get; init; }
 
     public string RequestKey { get; init; } = string.Empty;
@@ -122,6 +126,8 @@ public static class SessionPlanner
 
         if (s.MatchWindowVisible)
             return SessionAction.Wait("waiting for the match window to take input");
+        if (s.Preparing is { } preparing)
+            return SessionAction.Wait(preparing);
         if (stopping)
             return new SessionAction(SessionActionKind.Done, string.Empty, string.Empty, goal.StopRequested ? "stopped" : $"{matchesDone} match(es) played");
         if (s.PlayerOccupied)

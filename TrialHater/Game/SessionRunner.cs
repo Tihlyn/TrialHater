@@ -88,6 +88,9 @@ public sealed unsafe class SessionRunner
 
     public string? DeckPending { get; set; }
 
+    // Set by the plugin each frame while the session's deck is being built.
+    public string? Preparing { get; set; }
+
     public string LastAction { get; private set; } = string.Empty;
 
     public void Start(uint npcTriadId, string npcName, int maxMatches)
@@ -259,6 +262,7 @@ public sealed unsafe class SessionRunner
             DeckSelectOpen = deck != null && Actionable(deck, DeckConfirmNode),
             DeckRow = this.DeckRow,
             DeckPending = this.DeckPending,
+            Preparing = this.Preparing,
             RequestOpen = request != null && Actionable(request, RequestChallengeNode),
             RequestKey = this.Run("TripleTriadRequest", request != null).ToString(),
             // Only the session NPC's lines (Talk[1] is the speaker; some Triad lines leave it empty).

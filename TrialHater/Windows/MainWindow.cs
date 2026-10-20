@@ -139,6 +139,8 @@ public sealed class MainWindow : Window
         ImGui.TextColored(session.Active ? GoodColor : MutedColor, session.Status);
         if (config.SessionPicksDeck && this.plugin.DeckChooser.Summary.Length > 0)
             ImGui.TextColored(MutedColor, this.plugin.DeckChooser.Summary);
+        if (config.SessionBuildsDeck && this.plugin.DeckPrep.Summary.Length > 0)
+            ImGui.TextColored(MutedColor, $"deck building: {this.plugin.DeckPrep.Summary}");
         if (session.LastAction.Length > 0)
             ImGui.TextColored(MutedColor, $"last: {session.LastAction}");
     }

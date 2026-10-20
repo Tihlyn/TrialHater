@@ -48,5 +48,6 @@ Target the NPC before challenging it. The target identifies the NPC's deck, and 
 | Open Tournament (Draft) | Matches auto-played after the fix for drafted decks; 2026-10-19: 2nd of 8. Draft picks and tournament windows are manual. The main window lists the next 10 tournaments and their rules |
 | Deck builder | Main window, "Deck builder": best decks from the owned cards against the targeted NPC, and how the saved decks compare (`TrialHater.Core/Deck`, offline: `tools/DeckBench`). Choosing a saved deck in the session waits on mapping the deck list's row selection |
 | Anti-AFK | Control press when the game's idle counters pass 30 s during unattended auto play (ported from MahjongHater) |
-| Card registration, travel between NPCs, writing decks | Not built |
+| Deck writing | Working in game (2026-10-20): "Write #1 to Deck N" builds a deck through the Gold Saucer editor in about 5 s, checking the editor shows the target deck first and game memory after. Only the slot chosen in Settings is ever written. With "Sessions build the best deck first", a session builds the best deck against its NPC before talking to it, when it is new and beats the saved decks by 0.10 or more, then plays it |
+| Card registration, travel between NPCs | Not built |
 | Not yet seen in game | Random; a combo deciding Fallen Ace (docs/RULES.md) |
