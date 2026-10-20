@@ -316,3 +316,20 @@ The pairs join two rarities and exclude each other, so only 27 decks are possibl
 
 **Other windows seen:** `TournamentRanking` (246 events, the ranking board), `ContentsFinderConfirm` / `ContentsFinderReady` (queue pop), `_NotificationFinder`.
 
+## Session 17: 2026-10-20 19:00-19:10 UTC, Open Tournament sign-up and exit (auto-drafted, 1st of 8)
+
+The first fully automatic tournament after sign-up: draft (advised deck confirmed in 4 s), 3 wins, all three round reports confirmed. The sign-up and exit windows came from the restored watchlist's capture:
+
+| Step | Window | Values | Action |
+|---|---|---|---|
+| Greeting | `Talk` | | click (`[]`) |
+| Menu | `SelectString` | `[2]` "Open tournament currently underway!", `[5]` 4 entries from `[7]`: "Sign up for an Open tournament.", "View the Open tournament schedule.", "View tournament mode explanations.", "Cancel." | `[0]` |
+| Sign-up | `SelectYesno` | `[0]` "... Sign up for this tournament?" | Yes: node 8 -> `[0]` |
+| Queue | | 3 min this time | |
+| Duty pop | `ContentsFinderConfirm` | `[1]` "Triple Triad Open Tournament" | Commence: node 63 -> `[8]` |
+| Ranking board | `TournamentRanking` | | closes itself (`[1]`, `[0]`, `[-2]`) |
+| Results | `TripleTriadTournamentResult` | | node 44 -> `[2, false]` |
+| Rewards | `TripleTriadTournamentReward` | | node 20 -> `[0, false]` |
+
+`TournamentRunner` (with `TournamentPlanner`) automates these steps. It talks only to the Official targeted at start, answers only its own sign-up question and the Open Tournament's duty pop, and leaves "Ready to begin match?" alone (it closes itself). The texts it matches are the English client's.
+

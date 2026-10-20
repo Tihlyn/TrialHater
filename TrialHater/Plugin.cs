@@ -68,6 +68,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
         this.DeckWriter = new DeckWriter(gameGui, msg => log.Information(msg));
         this.DeckPrep = new SessionDeckPrep(msg => log.Information(msg));
         this.Draft = new DraftService(gameGui, pluginInterface.GetPluginConfigDirectory(), msg => log.Information(msg));
+        this.Tournament = new TournamentRunner(gameGui, targets, objects, condition, msg => log.Information(msg));
         this.Tracker.Event += this.OnTrackerEvent;
         this.Tracker.RedMoved += this.journal.RedMoved;
         this.Tracker.MatchEnded += this.OnMatchEnded;
@@ -135,6 +136,8 @@ public sealed unsafe class Plugin : IDalamudPlugin
     public SessionDeckPrep DeckPrep { get; }
 
     public DraftService Draft { get; }
+
+    public TournamentRunner Tournament { get; }
 
     public WindowSystem WindowSystem { get; }
 
@@ -245,9 +248,14 @@ public sealed unsafe class Plugin : IDalamudPlugin
                 baseId => data.NpcBaseToTriad.TryGetValue(baseId, out var triad) && triad == this.Session.NpcTriadId);
         }
 
+        if (this.Tournament.Active && !this.AutoPlayer.Enabled)
+            this.Tournament.Stop("auto play is off");
+        if (!blocked)
+            this.Tournament.Tick(DateTime.UtcNow, this.Configuration.SessionDelayMs);
+
         // In a duty the inactivity kick also runs between matches (tournament rounds, queues).
         var inDuty = this.condition[ConditionFlag.BoundByDuty] || this.condition[ConditionFlag.BoundByDuty56] || this.condition[ConditionFlag.BoundByDuty95];
-        this.IdleGuard.Tick(this.AutoPlayer.Enabled, this.Tracker.InMatch || this.Session.Active || inDuty, DateTime.UtcNow);
+        this.IdleGuard.Tick(this.AutoPlayer.Enabled, this.Tracker.InMatch || this.Session.Active || this.Tournament.Active || inDuty, DateTime.UtcNow);
     }
 
     // Farms the NPC we are facing.
@@ -257,6 +265,8 @@ public sealed unsafe class Plugin : IDalamudPlugin
             return "sheets are still loading";
         if (this.FacingNpc(data) is not { } npc)
             return "target a Triple Triad NPC first";
+        if (this.Tournament.Active)
+            return "a tournament queue is running";
         this.SetAutoPlay(true);
         this.Session.Start(npc.TriadId, npc.Name, this.Configuration.SessionMaxMatches);
         if (!this.Configuration.SessionPicksDeck)
@@ -295,6 +305,19 @@ public sealed unsafe class Plugin : IDalamudPlugin
         var history = this.journal.RulesHistory(npc.TriadId);
         var (rules, _) = DeckRules.ExpectedRules(npc, history);
         this.DeckChooser.Start(npc, rules, history.Count == 0, Collection.SavedDecks(data.Cards), data.Cards);
+    }
+
+    // Queues for Open Tournaments with the targeted Official; the draft and matches run on auto.
+    public string? StartTournament()
+    {
+        if (this.Data is null)
+            return "sheets are still loading";
+        if (this.Session.Active)
+            return "a farming session is running";
+        var error = this.Tournament.Start(this.Configuration.TournamentCount);
+        if (error is null)
+            this.SetAutoPlay(true);
+        return error;
     }
 
     // Searches the best decks from the collection against the NPC we are facing, under the rules

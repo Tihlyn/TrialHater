@@ -54,6 +54,9 @@ public sealed class Configuration : IPluginConfiguration
     // Open Tournament: with auto play on, take the draft advisor's options and confirm the deck.
     public bool AutoDraft { get; set; } = true;
 
+    // Open Tournaments to queue for in a row (0 = until stopped).
+    public int TournamentCount { get; set; } = 1;
+
     // Raw dumps of the game's own Triple Triad model at every turn, for mapping it
     // (pluginConfigs/TrialHater/model_probe.jsonl).
     public bool ModelProbe { get; set; }

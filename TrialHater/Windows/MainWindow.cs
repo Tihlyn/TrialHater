@@ -46,6 +46,7 @@ public sealed class MainWindow : Window
         this.DrawSession();
         this.DrawDeckBuilder();
         this.DrawDraft();
+        this.DrawTournamentQueue();
         this.DrawTournaments();
         var tracker = this.plugin.Tracker;
         if (tracker.View is not { } view)
@@ -303,6 +304,45 @@ public sealed class MainWindow : Window
         ImGui.EndTable();
         ImGui.TextColored(MutedColor, "Take the green option of each pick. Others: the best deck with that option, compared with the best deck.");
         ImGui.TextColored(MutedColor, advice.Status);
+    }
+
+    private string? tournamentError;
+
+    // Queue for Open Tournaments with the targeted Official and play them through.
+    private void DrawTournamentQueue()
+    {
+        var runner = this.plugin.Tournament;
+        var config = this.plugin.Configuration;
+        if (!ImGui.CollapsingHeader("Open Tournament queue"))
+            return;
+        if (!runner.Active)
+        {
+            var count = config.TournamentCount;
+            ImGui.SetNextItemWidth(120);
+            if (ImGui.InputInt("Tournaments (0 = until stopped)", ref count))
+            {
+                config.TournamentCount = Math.Max(0, count);
+                config.Save();
+            }
+
+            if (ImGui.Button("Queue"))
+                this.tournamentError = this.plugin.StartTournament();
+            ImGui.SameLine();
+            ImGui.TextColored(MutedColor, "target the Open Tournament Official, stand next to it");
+            if (this.tournamentError is { } error)
+                ImGui.TextColored(WarnColor, error);
+        }
+        else
+        {
+            var goal = runner.MaxTournaments == 0 ? "until stopped" : $"{runner.TournamentsDone}/{runner.MaxTournaments}";
+            ImGui.TextUnformatted($"Open Tournament: {goal} | {runner.Phase}");
+            if (ImGui.Button("Stop queueing"))
+                runner.Stop("stopped by the player");
+        }
+
+        ImGui.TextColored(runner.Active ? GoodColor : MutedColor, runner.Status);
+        if (runner.LastAction.Length > 0)
+            ImGui.TextColored(MutedColor, $"last: {runner.LastAction}");
     }
 
     // The next Open Tournaments (Gold Saucer), computed from the sheet rotation, in local time.
