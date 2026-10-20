@@ -181,14 +181,17 @@ public sealed unsafe class Plugin : IDalamudPlugin
             baseId => data.NpcBaseToTriad.TryGetValue(baseId, out var triad) && triad == this.Session.NpcTriadId);
     }
 
-    // Farms the NPC we are facing: the one in the current match, else the current target.
+    // Farms the NPC we are facing: the one in the current match, else the current target, else
+    // the last match's (the target can be cleared once its menu is open).
     public string? StartSession()
     {
         if (this.Data is not { } data)
             return "sheets are still loading";
-        var triad = this.Tracker.NpcTriadId;
+        var triad = this.Tracker.InMatch ? this.Tracker.NpcTriadId : 0;
         if (triad == 0 && this.targets.Target is { } target && data.NpcBaseToTriad.TryGetValue(target.BaseId, out var targeted))
             triad = targeted;
+        if (triad == 0)
+            triad = this.Tracker.NpcTriadId;
         if (triad == 0 || data.Npcs.Get(triad) is not { } npc)
             return "target a Triple Triad NPC first";
         this.SetAutoPlay(true);

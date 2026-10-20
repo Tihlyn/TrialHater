@@ -55,6 +55,21 @@ public class BeliefTests
     }
 
     [Fact]
+    public void ASwappedCardOfOursInTheNpcsHandIsNotPartOfItsDeck()
+    {
+        // Yellow Moon, 2026-10-20 10:36: we gave 8744 and received 7137/Garlean; the NPC shows 4A59
+        // and our 8744. Without the swap known, 8744 does not fit its deck (the stall).
+        var npc = Npcs.Get(2293796)!;
+        var red = new[] { HandSlot.Of(C("4A59/Garlean")), HandSlot.Hidden, HandSlot.Hidden, HandSlot.Of(C("8744")), HandSlot.Hidden };
+        Assert.False(HandBelief.Build(View(npc, red), npc, Catalog).Usable);
+
+        var view = View(npc, red) with { RedForeign = [C("8744")], RedLost = [C("7137/Garlean")] };
+        var belief = HandBelief.Build(view, npc, Catalog);
+        Assert.True(belief.Usable, belief.Status);
+        Assert.All(belief.Hypotheses, h => Assert.DoesNotContain(C("7137/Garlean"), h.RedHand.Select(c => c!.Value)));
+    }
+
+    [Fact]
     public void PlayedCardsCountAsSeen()
     {
         var npc = Npcs.Get(Memeroon)!;

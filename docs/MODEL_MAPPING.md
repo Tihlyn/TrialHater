@@ -161,3 +161,28 @@ Result: 5th of 8 (3 points). Round 1 vs Fox Dragus: draw 5-5 (auto). Round 2 vs 
 **Seats.** The board names its blue player in AtkValues `[1]` (title in `[2]`) and its red player in `[4]` (title `[5]`). Against NPCs we are always blue. In round 3 the other player was blue and we were red. Our cards sat in the red hand slots, with owner 2 on the board. The game still announced our turn with command 1. Our placements were sent as `[14, slot << 16 | cell]` with the **red slot index** of our card and the absolute cell, the same encoding as when blue. The plugin had read the other player's face-down hand as ours ("no legal move"). `BoardReader` now mirrors the frame when `[4]` is our character's name: hands swapped, owners 1 <-> 2, opponent name from `[1]`.
 
 **Draft slot order is per tournament.** All 8 decks again had one card per rarity, all in the same slot order, but this time it was 2-1-4-3-5 stars. The first tournament used 3-5-2-4-1. The order also matched our own hand, so `MatchTracker` reads our hand's rarities at the deal (`SlotStars`) and `HandBelief` gives each hidden red slot that rarity. Without the order it falls back to "the rarities not yet seen". The draft window's "recommended" picks were used, and the draft callbacks were `[1]`, `[2]`, then `[-2]` as before.
+
+## Session 8: 2026-10-20 10:27-11:14 UTC, rule hunting (Aurifort, Yellow Moon, Yayake, Kaizan, Tsuzura)
+
+25 matches, all replayed by ProbeReplay with 0 mismatches (56 matches, 504 placements in total).
+
+**Order** (Aurifort, Three Open + Order, 5 wins on auto): our turn is command 6 with the forced slot in `[25]`, exactly like Chaos, so the existing Chaos path played it. The slots came 0, 1, 2, 3, 4.
+
+**Swap** (Yellow Moon, Kaizan, 2 of Yayake's and 1 of Tsuzura's Roulette rolls). After the rule announcement (command 14 with `[25]` = the rule's icon), the board runs:
+
+| `[23]` | `[24]` | `[25]` | |
+|---|---|---|---|
+| 25 | 0 | our slot | |
+| 25 | 1 | their slot | |
+| 24 | 0 | our slot | |
+| 24 | 1 | their slot | then the turn order (9, 11, 7) and the first turn |
+
+Yellow Moon: our slot 2 <-> their slot 3. Yayake: 2 <-> 4. Tsuzura: 4 <-> 1. The card we give stays face up in their hand. Every Swap match stalled ("NoBelief: ... does not fit its fixed + variable deck"): `MatchTracker` compared our hand with the saved decks on the first frame of the deal, which is before the exchange, found no difference, and gave up. Our card then showed up in the NPC's hand as an unexplained card. The tracker now keeps the hand as dealt (while it still equals a saved deck) and resolves the swap when the hand changes by one card, with the saved decks as a fallback if the deal was missed.
+
+**Roulette** (Yayake, Tsuzura): the rule text shows the rolled rule. Rolled: Swap x3, Ascension x2, Three Open x3, Descension, Same. No Random.
+
+**Rule points settled:** type shift excludes the placed card (one decisive placement, Yayake 10:48:57). Combo under Reverse is still open: no combo happened in a Reverse match.
+
+**Sessions** started with the previous match's NPC as their target (`Tracker.NpcTriadId` outlives the match). Harmless here because each NPC's menu was already open, but an Interact step would have looked for the wrong NPC. `StartSession` now prefers the current target outside a match.
+
+**Reverse results:** Tsuzura (Chaos + Reverse) won 1 of 5 and Kaizan (Reverse, Descension) 1 of 5. ProbeReplay shows the rules were played correctly. The saved deck is built from high numbers (8744, 7A91, 7479, 7528, 5468), which lose under Reverse, and under Chaos the plugin cannot choose which card to play.

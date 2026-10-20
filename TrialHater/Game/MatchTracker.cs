@@ -14,6 +14,8 @@ public sealed class MatchTracker
     private BoardFrame? previous;
     private RuleSet rules = RuleSet.Empty;
     private bool swapResolved;
+    private List<CardStats>? dealtHand;
+    private List<CardStats>? swapHand;
     private List<CardStats> redForeign = new();
     private List<CardStats> redLost = new();
     private byte[]? slotStars;
@@ -67,6 +69,8 @@ public sealed class MatchTracker
         this.Opponent = null;
         this.Warning = null;
         this.swapResolved = false;
+        this.dealtHand = null;
+        this.swapHand = null;
         this.redForeign = new();
         this.redLost = new();
         this.slotStars = null;
@@ -114,8 +118,8 @@ public sealed class MatchTracker
         if (this.previous is { } before && before.Visible)
             this.TrackChanges(before, frame);
 
-        if (!this.swapResolved && this.rules.Has(TriadRule.Swap) && frame.OnBoard == 0 && frame.BlueInHand == 5)
-            this.ResolveSwap(frame, savedDecks());
+        if (!this.swapResolved && this.rules.Has(TriadRule.Swap) && this.Round == 0)
+            this.ResolveSwap(frame, savedDecks);
 
         // Draft: our hand's star order as dealt, before any card leaves it (see HandBelief).
         if (this.slotStars is null && this.Round == 0 && frame.Blue.All(s => s.HasCard && !s.Hidden))
@@ -230,33 +234,62 @@ public sealed class MatchTracker
         return null;
     }
 
-    // Swap trades one random card each way before the first move. Our hand then differs from the
-    // saved deck we picked by exactly one card: that one is the NPC's (seen, no longer in its
-    // hand), and our missing card is now in the NPC's hand.
-    private void ResolveSwap(BoardFrame frame, IReadOnlyList<CardStats[]> decks)
+    // Swap trades one card each way a second or two after the deal, before the first turn (the
+    // board's commands 25 and 24 animate it, 2026-10-20). Our hand then differs from the hand as
+    // dealt by exactly one card: that one is the NPC's (seen, no longer in its hand), and the card
+    // it replaced is now in the NPC's hand. A hand equal to a saved deck is (still) the hand as
+    // dealt. If the deal was missed (plugin loaded mid-match), the last hand before the first card
+    // lands is compared with the saved decks, and used only if exactly one deck fits.
+    private void ResolveSwap(BoardFrame frame, Func<IReadOnlyList<CardStats[]>> savedDecks)
     {
-        this.swapResolved = true;
-        var hand = frame.Blue.Where(s => s.HasCard).Select(Stats).ToList();
-        foreach (var deck in decks)
+        if (frame.OnBoard == 0)
         {
-            var missing = new List<CardStats>(deck);
-            var extra = new List<CardStats>();
-            foreach (var card in hand)
-            {
-                if (!missing.Remove(card))
-                    extra.Add(card);
-            }
-
-            if (missing.Count == 1 && extra.Count == 1)
-            {
-                this.redForeign = missing;
-                this.redLost = extra;
-                this.Note($"swap: gave {missing[0]}, received {extra[0]}");
+            if (!frame.Blue.All(s => s.HasCard && !s.Hidden))
                 return;
-            }
+            var hand = frame.Blue.Select(Stats).ToList();
+            this.swapHand = hand;
+            if (this.dealtHand is null || savedDecks().Any(d => Diff(d, hand) is { Missing.Count: 0 }))
+                this.dealtHand = hand;
+            else if (this.Swapped(this.dealtHand, hand, "the dealt hand"))
+                this.swapResolved = true;
+            return;
         }
 
-        this.Warning = "Swap is on but no saved deck matches the hand; the NPC's hand reading may be off";
+        this.swapResolved = true;
+        if (this.swapHand is { } last)
+        {
+            var fits = savedDecks().Where(d => Diff(d, last) is { Missing.Count: 1, Extra.Count: 1 }).ToList();
+            if (fits.Count == 1 && this.Swapped(fits[0], last, "the saved deck"))
+                return;
+        }
+
+        this.Warning = "Swap is on but the exchange was not seen; the NPC's hand reading may be off";
+        this.Note(this.Warning);
+    }
+
+    private bool Swapped(IReadOnlyList<CardStats> before, IReadOnlyList<CardStats> after, string against)
+    {
+        var (missing, extra) = Diff(before, after);
+        if (missing.Count != 1 || extra.Count != 1)
+            return false;
+        this.redForeign = missing;
+        this.redLost = extra;
+        this.Note($"swap: gave {missing[0]}, received {extra[0]} (against {against})");
+        return true;
+    }
+
+    // Cards of `before` not in `after`, and cards of `after` not in `before` (as multisets).
+    private static (List<CardStats> Missing, List<CardStats> Extra) Diff(IReadOnlyList<CardStats> before, IReadOnlyList<CardStats> after)
+    {
+        var missing = new List<CardStats>(before);
+        var extra = new List<CardStats>();
+        foreach (var card in after)
+        {
+            if (!missing.Remove(card))
+                extra.Add(card);
+        }
+
+        return (missing, extra);
     }
 
     private MatchView BuildView(BoardFrame frame)
