@@ -277,3 +277,22 @@ Cartographer gained a `null` value token for `/callback` (an Undefined AtkValue)
 - **Menu without icons.** At Kaizan and Gyoei, `SelectIconString` lists "Triple Triad Challenge", "Small Talk" and "Nothing" with icon 0 each (`[6 + 3i]`). The session now also matches the entry by its text, which is `Addon` sheet row 9184 in the client language.
 - **Talk without a click handler.** Gyoei's Talk window registers no `MouseClick` on any node: only window and input events on the root (node 1). A real click arrives as MouseDown/MouseUp on a collision node, and the window then sends an **empty callback `[]` with the flag set** and closes. A synthetic MouseClick on node 1 did nothing. The empty callback, sent through the operator, advanced the dialog to `TripleTriadRequest`. The session sends it when the window has no click handler.
 
+## Session 15: 2026-10-20 17:01-17:11 UTC, Open Tournament (Draft, Ascension, Fallen Ace), draft advisor
+
+**Result:** 2nd of 8. W 6-4 Jonas, W 6-4 Guhtwint, D 5-5 Kyle Reld (a player). 5 points, tied with the winner, who had 3 captures to our 2. All three matches auto-played; ProbeReplay ok.
+
+**Advisor:** best deck +0.32 (243 decks vs 96 opponents, 24 of them seen in past tournaments): Wanyudo & Katasharin (1*), Kojin (2*), Tozol Huatotl (3*), Ultima Weapon (4*), Regula van Hydrus (5*). The deck played had Lyna instead of Tozol Huatotl.
+
+**Draft picks.**
+- **Clicks:** each card click is callback `[3, a, b]` (ButtonClick, nodes 11-13 / 25-27 / 39-41, params 3-11 for the clicks seen). The window's values do not change on a click, so the selection is not readable there.
+- **Values:** the offer in the values is interleaved by rarity: 2* at 0/2/4, 3* at 1/3/5, 4* at 6/8/10, 5* at 7/9/11, 1* at 12-14 (the same position pattern as session 6, with different rarities).
+- **Reading:** "card 3a + b" does not explain the final deck. Rows of three, `[3, row, column]`, with untouched rows keeping the game's preselected card, does. The player clicked rows 0-2 and the 3* row kept Lyna. This is still to be confirmed.
+- **Confirm:** `[2]` (node 48) opens `TripleTriadDeckConfirmation`; `[0]` confirms. The plugin now compares the confirmation's five cards with the advice while the draft window is up.
+
+**Between matches:**
+- **No click needed:** the board closes itself ~1.8 s after the last card (command 10). The round lineup (`TripleTriadTournamentMatchList`, points/"DRAW") closes itself at its countdown's 0:00 with no input.
+- **"Ready to begin match?"** (`SelectYesno`, OK/No) appears before each round. Unanswered, it closes after 10 s and the match starts anyway; OK = `[0]`.
+- **Registration:** signing up is a `SelectYesno` naming the advanced rules ("In addition to Draft ... Ascension, Fallen Ace").
+
+**Results:** the plugin recorded the 8 drafted decks into `tournament_decks.csv`.
+

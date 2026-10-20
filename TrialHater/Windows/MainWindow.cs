@@ -269,6 +269,14 @@ public sealed class MainWindow : Window
         }
 
         var best = advice.Ranked[0];
+        if (draft.ConfirmDiff is { } diff)
+        {
+            if (diff.Count == 0)
+                ImGui.TextColored(GoodColor, "Deck to confirm = the advised deck.");
+            foreach (var (picked, advised) in diff)
+                ImGui.TextColored(WarnColor, $"Deck to confirm has {picked.Name} ({picked.Stars}*), but the advice was {advised.Name}.");
+        }
+
         ImGui.TextUnformatted($"Best deck: {best.Expected:+0.00;-0.00;0.00} per game ({best.Win:P0} wins, {best.Loss:P0} losses in simulation)");
         if (!ImGui.BeginTable("draft", 4, ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingStretchProp))
             return;

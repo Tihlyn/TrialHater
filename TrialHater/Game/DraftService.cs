@@ -15,6 +15,11 @@ public sealed unsafe class DraftService : IDisposable
 {
     private const string DraftAddon = "TripleTriadPickUpDeckSelect";
     private const string ResultAddon = "TripleTriadTournamentResult";
+    private const string ConfirmAddon = "TripleTriadDeckConfirmation";
+
+    // TripleTriadDeckConfirmation: the 5 picks as (name, 87000 + id, ...) in stride 5 from [0].
+    private const int ConfirmIdBase = 1;
+    private const int ConfirmStride = 5;
 
     // TripleTriadPickUpDeckSelect: the 15 offered cards as 87000 + id in stride 5 from [3].
     private const int OfferBase = 3;
@@ -53,10 +58,15 @@ public sealed unsafe class DraftService : IDisposable
 
     public string Status { get; private set; } = string.Empty;
 
+    // While the draft's deck confirmation is up: the picked cards that differ from the advice
+    // (empty when the deck is the advised one), or null when there is nothing to compare.
+    public IReadOnlyList<(CardInfo Picked, CardInfo Advised)>? ConfirmDiff { get; private set; }
+
     public void Tick(GameData data, DateTimeOffset now)
     {
         this.RecordResults(now);
         var draft = this.Ready(DraftAddon);
+        this.CompareConfirmation(data, draft != null);
         if (draft == null)
             return;
         var ids = Enumerable.Range(0, 15).Select(k => AddonOps.IntValue(draft, OfferBase + (OfferStride * k)) - OfferIconBase).ToList();
@@ -78,6 +88,29 @@ public sealed unsafe class DraftService : IDisposable
     }
 
     public void Dispose() => this.cancel?.Cancel();
+
+    // The deck about to be confirmed against the advice (2026-10-20: a 3* row left on its
+    // preselected card went unnoticed until the results). Only while the draft window is up: the
+    // same confirmation window shows other players' decks on the results screen.
+    private void CompareConfirmation(GameData data, bool drafting)
+    {
+        var confirm = drafting ? this.Ready(ConfirmAddon) : null;
+        if (confirm == null || this.Advice is not { Picks.Count: 5 } advice)
+        {
+            this.ConfirmDiff = null;
+            return;
+        }
+
+        var picked = Enumerable.Range(0, 5).Select(k => data.Cards.Get((ushort)(AddonOps.IntValue(confirm, ConfirmIdBase + (ConfirmStride * k)) - OfferIconBase))).ToList();
+        if (picked.Any(c => c is null))
+        {
+            this.ConfirmDiff = null;
+            return;
+        }
+
+        this.ConfirmDiff = picked.Select(p => (Picked: p!, Advised: advice.Picks.First(a => a.Stars == p!.Stars)))
+            .Where(x => x.Picked.Id != x.Advised.Id).ToList();
+    }
 
     // The rules of the tournament slot `now` falls in (tournaments run all through a slot).
     private static RuleSet CurrentRules(GameData data, DateTimeOffset now)

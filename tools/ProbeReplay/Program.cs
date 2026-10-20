@@ -15,11 +15,15 @@ var rows = File.ReadLines(path).Select(l => JsonDocument.Parse(l).RootElement).T
 var placement = new Regex(@"^(we|red) played (\S+) at (\d)$");
 
 // The match counter restarts with every plugin reload, so matches are split on their start line.
+// A Sudden Death round is redealt from the board: it replays as a game of its own.
 var matches = new List<List<JsonElement>>();
+var lastRound = 0;
 foreach (var row in rows)
 {
-    if (row.GetProperty("trigger").GetString()!.StartsWith("match #", StringComparison.Ordinal) || matches.Count == 0)
+    var round = row.TryGetProperty("round", out var r) && r.ValueKind == JsonValueKind.Number ? r.GetInt32() : 0;
+    if (row.GetProperty("trigger").GetString()!.StartsWith("match #", StringComparison.Ordinal) || matches.Count == 0 || round != lastRound)
         matches.Add([]);
+    lastRound = round;
     matches[^1].Add(row);
 }
 
@@ -54,6 +58,12 @@ foreach (var lines in matches.Where(m => m.Any(r => placement.IsMatch(r.GetPrope
 
     var blueCards = PlayOrder("we");
     var redCards = PlayOrder("red");
+    if (blueCards.Count > 5 || redCards.Count > 5)
+    {
+        // Two matches under one start line (a reload or a missed board close between them).
+        Console.WriteLine($"{first.GetProperty("time").GetDateTime():HH:mm} npc {first.GetProperty("npc").GetUInt32()}: skipped ({blueCards.Count} + {redCards.Count} placements, more than one match)");
+        continue;
+    }
     var blueFirst = events[0].M.Groups[1].Value == "we";
     var engine = new Engine(new Position(rules, new BoardCard?[9], blueCards.Select(c => (CardStats?)c).ToArray(), redCards.Select(c => (CardStats?)c).ToArray(), blueFirst ? Side.Blue : Side.Red));
     var blueNext = 0;
