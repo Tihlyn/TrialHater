@@ -249,3 +249,26 @@ On the final ranking (`TripleTriadTournamentResult`):
 - **Closing:** `[3, 0]` was sent once (ButtonClick node 25, probably character details), and closing sent `[2, false]` and then `[0, false]` on the reward window.
 - **No pre-match view:** no deck view has been seen before a match (the match list offers none).
 
+## Session 13: 2026-10-20 15:12-15:20 UTC, operator tests in the deck editor (Deck 5)
+
+Tested with Cartographer's operator on an open Deck 5 editor, with the GoldSaucer agent (id 185) traced and the addon and agent memory watched.
+
+| Test | Sent | Result |
+|---|---|---|
+| 1 | `[11, 2, 3]` (3 values, UI flag) | card in slot 0 |
+| 2 | `FocusStart` param 4 on node 4, then `[11, 3, 6]` | slot 0 |
+| 3 | `DragDropClick` on slot node 174 (empty slot) | nothing (no callback, no menu) |
+| 4 | `[11, 1, 7]`, traced | the agent received kind 6 `[11, 1, 7]`; slot 0 |
+| 5 | `MouseOver` on slot node 175, then `[11, 3, 13]` | slot 0 |
+| player | three drags | `[11, s, id, -, -]` (5 values, two Undefined); the agent stores the id at +0x110 + 2 x slot |
+| 6 | `[11, 3, 30, -, -]` | **slot 3** |
+| 7 | `[13, 2, -, -, -]`, then menu `[0, 0, 0]` | **slot 2 emptied**; the menu stays open unless closed |
+| 8 | menu `[0, -1, 0]` with close | menu closed, nothing changed |
+| 9 | `[11, 2, 461, -, -]` (461 is on page 2, page 1 showing) | slot 2 = 461: placing does not depend on the page |
+
+**The editor reads its slot or deck argument only from a callback padded to the game's 5 values.** With fewer values the argument is lost and 0 is used. That explains the session 12 failures, and also that the short `[5, 4]` opened **Deck 1** in the editor rather than Deck 5. The writer now pads its callbacks (`AddonOps.CallbackPadded`). Before changing anything, it checks that the editor shows the target slot's name (`[524]`) and the cards the deck list showed for it; otherwise it stops.
+
+**Slot menu:** "Remove from Deck" `[0, 0, 0]`, "Change Deck Name" second. **Deck list menu** (right-click a deck row, `[6, k]`): the third entry `[0, 2, 0]` clears the deck after a Yes/No (`SelectYesno [0]`). The player cleared Decks 2 and 3 this way at 15:03.
+
+Cartographer gained a `null` value token for `/callback` (an Undefined AtkValue) for these tests.
+

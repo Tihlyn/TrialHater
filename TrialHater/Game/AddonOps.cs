@@ -66,6 +66,33 @@ internal static unsafe class AddonOps
         return new DispatchResult(true, $"callback [{string.Join(", ", values)}] close={close}");
     }
 
+    // Callback padded with Undefined values to `length`, the shape the game itself sends. The Gold
+    // Saucer deck editor reads its slot/deck argument only from a callback of that length: with
+    // three values [11, 3, id] went to slot 0 and [5, 4] opened Deck 1 (2026-10-20, session 13).
+    public static DispatchResult CallbackPadded(AtkUnitBase* addon, bool close, int length, params int[] values)
+    {
+        if (!CanReceiveInput(addon, out var why))
+            return DispatchResult.Refused(why);
+        var count = Math.Max(length, values.Length);
+        var vals = stackalloc AtkValue[count];
+        for (var i = 0; i < count; i++)
+        {
+            vals[i] = default;
+            if (i < values.Length)
+            {
+                vals[i].Type = AtkValueType.Int;
+                vals[i].Int = values[i];
+            }
+            else
+            {
+                vals[i].Type = AtkValueType.Undefined;
+            }
+        }
+
+        addon->FireCallback((uint)count, vals, close);
+        return new DispatchResult(true, $"callback [{string.Join(", ", values)}{string.Concat(Enumerable.Repeat(", -", count - values.Length))}] close={close}");
+    }
+
     // An Int/UInt AtkValue, or 0 (absent, other type).
     public static int IntValue(AtkUnitBase* addon, int index)
     {

@@ -11,7 +11,8 @@ namespace TrialHater.Game;
 // a reason. Framework thread only.
 public sealed unsafe class DeckWriter
 {
-    // GSInfoEditDeck: the 5 deck slots in stride 17 from [525], card id first.
+    // GSInfoEditDeck: the deck name at [524], then its 5 slots in stride 17 from [525], card id first.
+    private const int EditDeckName = 524;
     private const int EditSlotBase = 525;
     private const int EditSlotStride = 17;
 
@@ -21,6 +22,9 @@ public sealed unsafe class DeckWriter
     private const int CardIconBase = 88000;
 
     private const string RemoveEntry = "Remove from Deck";
+
+    // The game sends the editor's callbacks as 5 values; shorter ones lose their argument.
+    private const int CallbackLength = 5;
 
     private static readonly TimeSpan ActionGap = TimeSpan.FromMilliseconds(450);
     private static readonly TimeSpan RetryAfter = TimeSpan.FromSeconds(3);
@@ -40,6 +44,12 @@ public sealed unsafe class DeckWriter
     private bool openedWindow;
     private bool saved;
     private int menuSlot = -1;
+
+    // The deck list's name and cards for the slot, read before the editor opens; the editor must
+    // show the same before anything is changed in it.
+    private string? expectedName;
+    private int[]? expectedCards;
+    private bool editorVerified;
 
     public DeckWriter(Dalamud.Plugin.Services.IGameGui gameGui, Action<string> log)
     {
@@ -65,6 +75,9 @@ public sealed unsafe class DeckWriter
         this.openedWindow = false;
         this.saved = false;
         this.menuSlot = -1;
+        this.expectedName = null;
+        this.expectedCards = null;
+        this.editorVerified = false;
         this.waitingFor = string.Empty;
         this.Active = true;
         this.Written = null;
@@ -115,7 +128,11 @@ public sealed unsafe class DeckWriter
 
             if (!this.saved)
             {
-                this.Act(now, $"edit {this.slot}", "opening the deck editor", () => AddonOps.Callback(decks, false, 5, this.slot));
+                var row = DeckRowBase + (DeckRowStride * this.slot);
+                this.expectedName = AddonOps.StringValue(decks, row + 1);
+                this.expectedCards = Enumerable.Range(0, 5).Select(i => Math.Max(0, AddonOps.IntValue(decks, row + 2 + i) - CardIconBase)).ToArray();
+                this.Act(now, $"edit {this.slot}", $"opening {this.expectedName} in the deck editor",
+                    () => AddonOps.CallbackPadded(decks, true, CallbackLength, 5, this.slot));
                 return;
             }
 
@@ -158,10 +175,31 @@ public sealed unsafe class DeckWriter
     private void Edit(DateTime now, AtkUnitBase* editor, AtkUnitBase* menu)
     {
         var current = Enumerable.Range(0, 5).Select(s => AddonOps.IntValue(editor, EditSlotBase + (EditSlotStride * s))).ToArray();
+        if (!this.editorVerified)
+        {
+            // Never edit a deck the writer did not open: the editor must show the slot's name and
+            // its saved cards (a short [5, 4] once opened Deck 1).
+            var name = AddonOps.StringValue(editor, EditDeckName);
+            if (this.expectedCards is null)
+            {
+                this.Stop("stopped: a deck editor was already open; close it and press again");
+                return;
+            }
+
+            if (name != this.expectedName || !current.SequenceEqual(this.expectedCards))
+            {
+                this.Stop($"stopped: the editor shows '{name}' ({string.Join(",", current)}), not {this.expectedName} ({string.Join(",", this.expectedCards)}); nothing was changed");
+                return;
+            }
+
+            this.editorVerified = true;
+            this.log($"[DeckWriter] the editor shows {name} as expected");
+        }
+
         if (this.saved)
         {
             // The capture closed it with [17] then the window's own [-2]: send [17] and close.
-            this.Act(now, "close editor", "closing the editor", () => AddonOps.Callback(editor, true, 17));
+            this.Act(now, "close editor", "closing the editor", () => AddonOps.CallbackPadded(editor, true, CallbackLength, 17));
             return;
         }
 
@@ -176,7 +214,7 @@ public sealed unsafe class DeckWriter
                 return;
             }
 
-            this.Act(now, "save", "saving", () => AddonOps.Callback(editor, false, 10));
+            this.Act(now, "save", "saving", () => AddonOps.CallbackPadded(editor, true, CallbackLength, 10));
             return;
         }
 
@@ -195,7 +233,7 @@ public sealed unsafe class DeckWriter
 
             var place = s;
             this.Act(now, $"place {s} {this.target[s]}", $"placing card {this.target[s]} in slot {s + 1}",
-                () => AddonOps.Callback(editor, false, 11, place, this.target[place]));
+                () => AddonOps.CallbackPadded(editor, true, CallbackLength, 11, place, this.target[place]));
             return;
         }
     }
@@ -212,12 +250,13 @@ public sealed unsafe class DeckWriter
                 return;
             }
 
-            this.Act(now, $"remove {s}", $"removing slot {s + 1}", () => AddonOps.Callback(menu, false, 0, 0, 0));
+            // The game closes the menu with the choice.
+            this.Act(now, $"remove {s}", $"removing slot {s + 1}", () => AddonOps.Callback(menu, true, 0, 0, 0));
             return;
         }
 
         this.menuSlot = s;
-        this.Act(now, $"menu {s}", $"opening the menu of slot {s + 1}", () => AddonOps.Callback(editor, false, 13, s));
+        this.Act(now, $"menu {s}", $"opening the menu of slot {s + 1}", () => AddonOps.CallbackPadded(editor, true, CallbackLength, 13, s));
     }
 
     private bool RowShowsTarget(AtkUnitBase* decks)
