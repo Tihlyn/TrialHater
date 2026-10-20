@@ -4,62 +4,72 @@ using TrialHater.Core.Rules;
 
 namespace TrialHater.Core.Tournament;
 
-// The draft's best deck: Picks (one card per rarity, 1 to 5 stars), every legal deck ranked, and
-// for each offered card the best expected result of a deck containing it (to judge alternatives).
-public sealed record DraftAdvice(IReadOnlyList<CardInfo> Picks, IReadOnlyList<DeckScore> Ranked, IReadOnlyDictionary<ushort, double> CardValue, string Status);
+// One option of a draft pick: the card(s) it adds, and the best expected result of a deck that
+// takes it.
+public sealed record DraftOption(int Pick, int Choice, IReadOnlyList<CardInfo> Cards, double Value);
 
-// Open Tournament draft (docs/MODEL_MAPPING.md, session 6): 15 cards are offered, three per
-// rarity, and the deck takes one of each, so 3^5 = 243 decks. Each is scored with simulated games
-// (DeckEvaluator, quick: we take the most cards now, the opponent follows the greedy model) under
-// the tournament's rules against an opponent pool: drafted decks seen in past tournaments, topped
-// up with random one-per-rarity decks. The best dozen are scored again with more games. Opponents'
-// drafts are unknown in advance (each player gets its own offer), so this ranks decks against the
-// field, not against a particular player.
+// The draft's best deck (Picks, one card per rarity), the option to take at each of the three picks
+// (Best), every option with its value, and every possible deck ranked.
+public sealed record DraftAdvice(
+    IReadOnlyList<CardInfo> Picks,
+    IReadOnlyList<DraftOption> Best,
+    IReadOnlyList<DraftOption> Options,
+    IReadOnlyList<DeckScore> Ranked,
+    string Status);
+
+// Open Tournament draft (docs/MODEL_MAPPING.md, sessions 6 and 15). The window offers 15 cards in
+// three picks: pick 0 is one of the pairs (0,1), (2,3), (4,5); pick 1 one of the pairs (6,7),
+// (8,9), (10,11); pick 2 one of the cards 12, 13, 14 (positions in the window's AtkValues). A click
+// sends [3, pick, choice] and the last click of each pick counts. Each pair joins two rarities and
+// the pairs exclude each other, so the deck is one of 3 x 3 x 3 = 27, not any card per rarity.
+//
+// Each deck is scored with simulated games (DeckEvaluator, quick: we take the most cards now, the
+// opponent follows the greedy model) under the tournament's rules against an opponent pool:
+// drafted decks seen in past tournaments, topped up with random one-per-rarity decks.
+// Opponents' drafts are unknown in advance (each player gets its own offer), so this ranks decks
+// against the field, not against a particular player.
 public static class DraftAdvisor
 {
     public const int Opponents = 96;
-    public const int Refined = 12;
+    public const int OfferSize = 15;
 
+    // Window positions of each pick's options.
+    public static readonly int[][][] Layout =
+    [
+        [[0, 1], [2, 3], [4, 5]],
+        [[6, 7], [8, 9], [10, 11]],
+        [[12], [13], [14]],
+    ];
+
+    // `offer`: the 15 cards in window order.
     public static DraftAdvice Advise(IReadOnlyList<CardInfo> offer, RuleSet rules, IReadOnlyList<CardStats[]> observed, CardCatalog catalog,
         CancellationToken cancel = default, int seed = 1)
     {
-        var tiers = Enumerable.Range(1, 5).Select(s => offer.Where(c => c.Stars == s).ToList()).ToList();
-        if (tiers.Any(t => t.Count == 0))
-            return new DraftAdvice([], [], new Dictionary<ushort, double>(), "the offer does not have a card of every rarity");
+        if (offer.Count != OfferSize)
+            return Empty($"the offer has {offer.Count} cards, not {OfferSize}");
 
-        var decks = new List<IReadOnlyList<CardInfo>>();
-        foreach (var a in tiers[0])
-        foreach (var b in tiers[1])
-        foreach (var c in tiers[2])
-        foreach (var d in tiers[3])
-        foreach (var e in tiers[4])
-            decks.Add([a, b, c, d, e]);
+        var options = Layout.Select((pick, p) => pick.Select((positions, c) => (Pick: p, Choice: c, Cards: positions.Select(i => offer[i]).ToList())).ToList()).ToList();
+        var decks = new List<(int[] Choices, IReadOnlyList<CardInfo> Cards)>();
+        foreach (var a in options[0])
+        foreach (var b in options[1])
+        foreach (var c in options[2])
+            decks.Add(([a.Choice, b.Choice, c.Choice], [.. a.Cards, .. b.Cards, .. c.Cards]));
+        if (decks.Any(d => d.Cards.Select(c => c.Stars).Distinct().Count() != 5))
+            return Empty("the offer's picks do not make one card per rarity (window layout changed?)");
 
         var opponents = OpponentPool(observed, catalog, seed);
-        var quick = new DeckScore[decks.Count];
-        var options = new DeckEvaluationOptions { QuickPlayouts = 2 };
+        var scores = new DeckScore[decks.Count];
+        var evaluation = new DeckEvaluationOptions { QuickPlayouts = 8 };
         Parallel.For(0, decks.Count, new ParallelOptions { CancellationToken = cancel },
-            i => quick[i] = DeckEvaluator.Evaluate(decks[i], opponents, rules, options, exact: false, cancel));
+            i => scores[i] = DeckEvaluator.Evaluate(decks[i].Cards, opponents, rules, evaluation, exact: false, cancel));
 
-        var top = quick.OrderByDescending(s => s.Expected).Take(Refined).ToList();
-        var refined = new DeckScore[top.Count];
-        var more = options with { QuickPlayouts = 8 };
-        Parallel.For(0, top.Count, new ParallelOptions { CancellationToken = cancel },
-            i => refined[i] = DeckEvaluator.Evaluate(top[i].Cards, opponents, rules, more, exact: false, cancel));
-
-        var refinedKeys = refined.Select(Key).ToHashSet();
-        var ranked = refined.OrderByDescending(s => s.Expected)
-            .Concat(quick.Where(s => !refinedKeys.Contains(Key(s))).OrderByDescending(s => s.Expected))
-            .ToList();
-        var value = new Dictionary<ushort, double>();
-        foreach (var score in ranked)
-        {
-            foreach (var card in score.Cards)
-                value.TryAdd(card.Id, score.Expected);
-        }
-
+        var order = Enumerable.Range(0, decks.Count).OrderByDescending(i => scores[i].Expected).ToList();
+        var all = options.SelectMany(pick => pick.Select(o => new DraftOption(o.Pick, o.Choice, o.Cards,
+            Enumerable.Range(0, decks.Count).Where(i => decks[i].Choices[o.Pick] == o.Choice).Max(i => scores[i].Expected)))).ToList();
+        var bestDeck = order[0];
+        var best = Enumerable.Range(0, 3).Select(p => all.First(o => o.Pick == p && o.Choice == decks[bestDeck].Choices[p])).ToList();
         var status = $"{decks.Count} decks vs {opponents.Count} opponents ({Math.Min(observed.Count, Opponents)} seen in past tournaments) under [{rules}]";
-        return new DraftAdvice(ranked[0].Cards, ranked, value, status);
+        return new DraftAdvice(decks[bestDeck].Cards, best, all, order.Select(i => scores[i]).ToList(), status);
     }
 
     // Past drafted decks first (they show what the field actually drafts), then random decks of one
@@ -81,5 +91,5 @@ public static class DraftAdvisor
         return pool;
     }
 
-    private static string Key(DeckScore score) => string.Join(",", score.Cards.Select(c => c.Id).Order());
+    private static DraftAdvice Empty(string why) => new([], [], [], [], why);
 }

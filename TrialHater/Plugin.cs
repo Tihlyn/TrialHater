@@ -33,6 +33,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
     private long frameCounter;
     private int placedAtMatchStart;
     private bool writtenChecked = true;
+    private int draftGeneration;
 
     public Plugin(
         IDalamudPluginInterface pluginInterface,
@@ -221,7 +222,13 @@ public sealed unsafe class Plugin : IDalamudPlugin
         if (!blocked)
             this.DeckWriter.Tick(DateTime.UtcNow);
         this.CheckWrittenDeck(data);
-        this.Draft.Tick(data, DateTimeOffset.UtcNow);
+        this.Draft.Tick(data, DateTimeOffset.UtcNow, this.AutoPlayer.Enabled && !blocked);
+        if (this.Draft.OfferGeneration != this.draftGeneration)
+        {
+            // A new draft: a new tournament, with new decks for everyone.
+            this.draftGeneration = this.Draft.OfferGeneration;
+            this.Tracker.Decks.Clear();
+        }
         if (this.DeckPrep.Running && !this.Session.Active)
             this.DeckPrep.Cancel();
         this.DeckPrep.Tick(this.DeckWriter, this.DeckChooser);

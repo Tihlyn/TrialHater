@@ -64,4 +64,17 @@ public class TournamentTests
         Assert.Empty(decks.Get("Someone Else", t));
         Assert.Empty(decks.Get("Fox Dragus", t.AddHours(2)));
     }
+
+    [Fact]
+    public void ADeckThatContradictsTheKnownOneReplacesIt()
+    {
+        // Jonas, 2026-10-20: two tournaments in one slot, a new draft in the second.
+        var decks = new TournamentDecks();
+        var t = new DateTimeOffset(2026, 10, 20, 17, 5, 0, TimeSpan.Zero);
+        decks.Record("Jonas", [C("3771"), C("5827"), C("9258"), C("866A"), C("6115")], t);
+        var known = decks.Record("Jonas", [C("1111"), C("2222")], t.AddMinutes(15));
+        Assert.Equal([C("1111"), C("2222")], known);
+        decks.Clear();
+        Assert.Empty(decks.Get("Jonas", t.AddMinutes(16)));
+    }
 }

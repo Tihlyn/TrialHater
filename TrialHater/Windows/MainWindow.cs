@@ -278,31 +278,30 @@ public sealed class MainWindow : Window
         }
 
         ImGui.TextUnformatted($"Best deck: {best.Expected:+0.00;-0.00;0.00} per game ({best.Win:P0} wins, {best.Loss:P0} losses in simulation)");
+        // One row per pick, its three options in window order (pairs are taken together).
         if (!ImGui.BeginTable("draft", 4, ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingStretchProp))
             return;
-        ImGui.TableSetupColumn("Rarity", ImGuiTableColumnFlags.WidthFixed, 50);
-        ImGui.TableSetupColumn("Pick");
-        ImGui.TableSetupColumn("Other");
-        ImGui.TableSetupColumn("Other ");
+        ImGui.TableSetupColumn("Pick", ImGuiTableColumnFlags.WidthFixed, 40);
+        ImGui.TableSetupColumn("Option 1");
+        ImGui.TableSetupColumn("Option 2");
+        ImGui.TableSetupColumn("Option 3");
         ImGui.TableHeadersRow();
-        for (var stars = 5; stars >= 1; stars--)
+        for (var pick = 0; pick < 3; pick++)
         {
-            var pick = advice.Picks.First(c => c.Stars == stars);
             ImGui.TableNextRow();
             ImGui.TableNextColumn();
-            ImGui.TextUnformatted($"{stars}*");
-            ImGui.TableNextColumn();
-            ImGui.TextColored(GoodColor, $"{pick.Name} [{pick.Stats}]");
-            foreach (var other in draft.Offer.Where(c => c.Stars == stars && c.Id != pick.Id).Take(2))
+            ImGui.TextUnformatted($"{pick + 1}");
+            foreach (var option in advice.Options.Where(o => o.Pick == pick).OrderBy(o => o.Choice))
             {
                 ImGui.TableNextColumn();
-                var value = advice.CardValue.GetValueOrDefault(other.Id);
-                ImGui.TextColored(MutedColor, $"{other.Name} [{other.Stats}] {value - best.Expected:+0.00;-0.00;0.00}");
+                var chosen = advice.Best[pick].Choice == option.Choice;
+                var cards = string.Join(" + ", option.Cards.Select(c => $"{c.Name} {c.Stars}*"));
+                ImGui.TextColored(chosen ? GoodColor : MutedColor, chosen ? $"> {cards}" : $"{cards} {option.Value - best.Expected:+0.00;-0.00;0.00}");
             }
         }
 
         ImGui.EndTable();
-        ImGui.TextColored(MutedColor, "Others: best deck with that card instead, compared with the best deck.");
+        ImGui.TextColored(MutedColor, "Take the green option of each pick. Others: the best deck with that option, compared with the best deck.");
         ImGui.TextColored(MutedColor, advice.Status);
     }
 

@@ -16,6 +16,9 @@ public sealed unsafe class DraftService : IDisposable
     private const string DraftAddon = "TripleTriadPickUpDeckSelect";
     private const string ResultAddon = "TripleTriadTournamentResult";
     private const string ConfirmAddon = "TripleTriadDeckConfirmation";
+    private const string ReportAddon = "TripleTriadTournamentMLReport";
+    private const uint ReportOkNode = 7;
+    private static readonly TimeSpan ReportDelay = TimeSpan.FromSeconds(2);
 
     // TripleTriadDeckConfirmation: the 5 picks as (name, 87000 + id, ...) in stride 5 from [0].
     private const int ConfirmIdBase = 1;
@@ -40,6 +43,8 @@ public sealed unsafe class DraftService : IDisposable
     private string offerKey = string.Empty;
     private List<CardStats[]>? observed;
     private bool recordedLoaded;
+    private DateTimeOffset? reportSeen;
+    private bool reportPressed;
 
     public DraftService(Dalamud.Plugin.Services.IGameGui gameGui, string configFolder, Action<string> log)
     {
@@ -58,13 +63,21 @@ public sealed unsafe class DraftService : IDisposable
 
     public string Status { get; private set; } = string.Empty;
 
+    // Changes with every new draft offer: a new tournament began.
+    public int OfferGeneration { get; private set; }
+
+    // Rounds whose report window the plugin confirmed (auto play only).
+    public int ReportsConfirmed { get; private set; }
+
     // While the draft's deck confirmation is up: the picked cards that differ from the advice
     // (empty when the deck is the advised one), or null when there is nothing to compare.
     public IReadOnlyList<(CardInfo Picked, CardInfo Advised)>? ConfirmDiff { get; private set; }
 
-    public void Tick(GameData data, DateTimeOffset now)
+    public void Tick(GameData data, DateTimeOffset now, bool autoPlay)
     {
         this.RecordResults(now);
+        if (autoPlay)
+            this.ConfirmReport(now);
         var draft = this.Ready(DraftAddon);
         this.CompareConfirmation(data, draft != null);
         if (draft == null)
@@ -76,6 +89,7 @@ public sealed unsafe class DraftService : IDisposable
         if (key == this.offerKey)
             return;
         this.offerKey = key;
+        this.OfferGeneration++;
         var offer = ids.Select(id => data.Cards.Get((ushort)id)).OfType<CardInfo>().ToList();
         if (offer.Count != 15)
         {
@@ -110,6 +124,31 @@ public sealed unsafe class DraftService : IDisposable
 
         this.ConfirmDiff = picked.Select(p => (Picked: p!, Advised: advice.Picks.First(a => a.Stars == p!.Stars)))
             .Where(x => x.Picked.Id != x.Advised.Id).ToList();
+    }
+
+    // After each tournament match a report ("Round 2", "DRAW", "Points +1 Captures +0") waits for
+    // its OK (TripleTriadTournamentMLReport, button node 7 -> [-1]; 2026-10-20). Pressed once per
+    // appearance, after it has been up ReportDelay, through the button's own event.
+    private void ConfirmReport(DateTimeOffset now)
+    {
+        var report = this.Ready(ReportAddon);
+        if (report == null)
+        {
+            this.reportSeen = null;
+            this.reportPressed = false;
+            return;
+        }
+
+        this.reportSeen ??= now;
+        if (this.reportPressed || now - this.reportSeen < ReportDelay)
+            return;
+        var result = AddonOps.ActivateButton(report, ReportOkNode);
+        this.reportPressed = result.Sent;
+        if (result.Sent)
+        {
+            this.ReportsConfirmed++;
+            this.log($"[Tournament] {AddonOps.StringValue(report, 0)} report ({AddonOps.StringValue(report, 2)}, {AddonOps.StringValue(report, 4)}): OK pressed");
+        }
     }
 
     // The rules of the tournament slot `now` falls in (tournaments run all through a slot).

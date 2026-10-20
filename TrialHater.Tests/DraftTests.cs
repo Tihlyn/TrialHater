@@ -8,8 +8,11 @@ namespace TrialHater.Tests;
 
 public class DraftTests
 {
-    // The 15 cards offered in the 2026-10-19 23:00 UTC tournament (three per rarity).
-    private static readonly ushort[] Offer = [18, 36, 78, 98, 127, 210, 248, 259, 294, 319, 359, 368, 372, 433, 457];
+    // The 2026-10-20 17:18 UTC offer in window order: pairs (0,1)..(4,5) of 3* + 2*, pairs (6,7)..
+    // (10,11) of 4* + 1*, then three 5*. The player took Magitek + Rhoswen, Themis + Kobold, Bahamut.
+    private static readonly ushort[] Offer = [92, 256, 48, 187, 176, 144, 209, 348, 433, 13, 385, 17, 74, 61, 419];
+
+    private static List<CardInfo> Cards(ushort[] ids) => ids.Select(id => Catalog.Get(id)!).ToList();
 
     private static List<CardStats[]> Observed() => DraftDecks.Parse(File.ReadLines(DataPath("draft-decks.csv")), Catalog);
 
@@ -27,24 +30,35 @@ public class DraftTests
     }
 
     [Fact]
-    public void TheAdviceIsOneOfferedCardPerRarityAndRanksEveryDeck()
+    public void TheAdviceIsOneOptionPerPickAndRanksTheTwentySevenDecks()
     {
-        var offer = Offer.Select(id => Catalog.Get(id)!).ToList();
-        var advice = DraftAdvisor.Advise(offer, RuleSet.Of(TriadRule.Draft), Observed(), Catalog);
-        Assert.Equal(243, advice.Ranked.Count);
+        var advice = DraftAdvisor.Advise(Cards(Offer), RuleSet.Of(TriadRule.Draft, TriadRule.Ascension, TriadRule.FallenAce), Observed(), Catalog);
+        Assert.Equal(27, advice.Ranked.Count);
+        Assert.Equal(9, advice.Options.Count);
+        Assert.Equal([0, 1, 2], advice.Best.Select(o => o.Pick));
         Assert.Equal(new byte[] { 1, 2, 3, 4, 5 }, advice.Picks.Select(c => c.Stars).Order());
-        Assert.All(advice.Picks, c => Assert.Contains(c.Id, Offer));
-        Assert.Equal(15, advice.CardValue.Count);
-        Assert.Equal(advice.Ranked[0].Expected, advice.Picks.Max(c => advice.CardValue[c.Id]), 9);
+
+        // The picks are whole options: a pair is taken together, never split.
+        Assert.Equal(advice.Picks, advice.Best.SelectMany(o => o.Cards));
+        Assert.All(advice.Best, o => Assert.Equal(advice.Ranked[0].Expected, o.Value, 9));
     }
 
     [Fact]
-    public void UnderReverseTheAdvicePicksLowerCards()
+    public void ThePairsComeFromTheWindowLayout()
     {
-        var offer = Offer.Select(id => Catalog.Get(id)!).ToList();
-        var plain = DraftAdvisor.Advise(offer, RuleSet.Of(TriadRule.Draft), Observed(), Catalog);
-        var reverse = DraftAdvisor.Advise(offer, RuleSet.Of(TriadRule.Draft, TriadRule.Reverse), Observed(), Catalog);
-        Assert.True(reverse.Picks.Sum(c => c.Stats.SideSum) < plain.Picks.Sum(c => c.Stats.SideSum),
-            $"reverse {string.Join(",", reverse.Picks.Select(c => c.Stats))} vs plain {string.Join(",", plain.Picks.Select(c => c.Stats))}");
+        var advice = DraftAdvisor.Advise(Cards(Offer), RuleSet.Of(TriadRule.Draft), Observed(), Catalog);
+        var first = advice.Options.Where(o => o.Pick == 0).Select(o => string.Join("+", o.Cards.Select(c => c.Id))).ToList();
+        Assert.Equal(["92+256", "48+187", "176+144"], first);
+        var third = advice.Options.Where(o => o.Pick == 2).Select(o => o.Cards.Single().Id).ToList();
+        Assert.Equal([74, 61, 419], third);
+    }
+
+    [Fact]
+    public void AnOfferThatDoesNotMakeOneCardPerRarityIsRefused()
+    {
+        var shuffled = Offer.Reverse().ToArray();
+        var advice = DraftAdvisor.Advise(Cards(shuffled), RuleSet.Of(TriadRule.Draft), Observed(), Catalog);
+        Assert.Empty(advice.Picks);
+        Assert.Contains("layout", advice.Status);
     }
 }

@@ -296,3 +296,23 @@ Cartographer gained a `null` value token for `/callback` (an Undefined AtkValue)
 
 **Results:** the plugin recorded the 8 drafted decks into `tournament_decks.csv`.
 
+## Session 16: 2026-10-20 17:17-17:24 UTC, Open Tournament with every window recorded
+
+Cartographer's watchlist was emptied, so it recorded every window outside its HUD ignore list, and a poller copied the timeline to a file. Result: draw Wyra, draw Nell Half-full, win Jonas.
+
+**The draft is three picks, not five rarities** (the player's description, confirmed against the captures of sessions 15 and 16):
+- **Pick 0:** one of the pairs at window positions (0,1), (2,3), (4,5).
+- **Pick 1:** one of the pairs (6,7), (8,9), (10,11).
+- **Pick 2:** one of the single cards 12, 13, 14.
+- **Clicks:** each click is `[3, pick, choice]` (buttons: nodes 11-13 pick 0, 25-27 pick 1, 39-41 pick 2; param 3 + 3 x pick + choice), and the last click of each pick counts.
+
+In both tournaments the last clicks give exactly the confirmed deck: 17:05 `[3,0,0] [3,1,2] [3,2,2]` = Kojin + Lyna, Ultima + Regula, Wanyudo; 17:18 `[3,0,2] [3,1,2] [3,2,1]` = Magitek + Rhoswen, Themis + Kobold, Bahamut.
+
+The pairs join two rarities and exclude each other, so only 27 decks are possible. `DraftAdvisor` now ranks those 27 and advises one option per pick. Re-scored with 40 observed decks, the decks played ranked #2 (17:05) and #18 (17:18; Mica + Chocobo instead of Themis + Kobold was worth +0.10).
+
+**Round report:** `TripleTriadTournamentMLReport` (5 values) appears after every match: `[0]` "Round N", `[1]` 11 draw / 9 win, `[2]` "DRAW"/"WIN", `[3]` a sound path, `[4]` "Points +1 Captures +0". It waits for its OK button (node 7 -> callback `[-1]`). With auto play on, the plugin now presses it after 2 s.
+
+**Tournament deck memory:** two tournaments ran in the same rules slot, and Jonas drafted a new deck in the second. The memory, reset only per slot, held his old deck as complete. A seen card that contradicted it dropped the memory for that match (HandBelief), but planning before that used the wrong hand. The memory now clears when a new draft offer appears, and a contradicting card replaces the remembered deck.
+
+**Other windows seen:** `TournamentRanking` (246 events, the ranking board), `ContentsFinderConfirm` / `ContentsFinderReady` (queue pop), `_NotificationFinder`.
+
