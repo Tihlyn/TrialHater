@@ -85,12 +85,24 @@ public class RuleTests
     }
 
     [Fact]
-    public void ComboIgnoresReverse()
+    public void ComboFollowsReverse()
     {
-        // As ComboChainsFromSameCaptures, under Reverse: the combo still compares plainly (9 > 2).
+        // As ComboChainsFromSameCaptures, under Reverse: Same still flips cells 1 and 3, but the
+        // combo compares with Reverse too, so 9 against 2 no longer takes cell 2.
         var board = Board(R("1911"), R("1949"), R("1112"), R("1611"));
         var rules = RuleSet.Of(TriadRule.Same, TriadRule.Reverse);
-        Assert.Equal("RBBBB....", OwnersAfter(Pos(rules, board, Hand("4116"), Filler.Red), 0, 4));
+        Assert.Equal("RBRBB....", OwnersAfter(Pos(rules, board, Hand("4116"), Filler.Red), 0, 4));
+    }
+
+    [Fact]
+    public void ComboFollowsReverseOnARealBoard()
+    {
+        // Gyoei (Plus, Reverse), 2026-10-20 12:55 UTC: 8744 at cell 1 makes 4 + 4 = 8 with our cell 0
+        // and 7 + 1 = 8 with cell 2, which flips. Cell 2's down 8 against cell 5's up 6 would
+        // capture plainly; the game kept cell 5 red. The lineage engine flipped it.
+        var board = Board(B("5468"), null, R("8381"), B("7479"), null, R("6967"));
+        var rules = RuleSet.Of(TriadRule.Plus, TriadRule.Reverse);
+        Assert.Equal("BBBB.R...", OwnersAfter(Pos(rules, board, Hand("8744"), Filler.Red), 0, 1));
     }
 
     [Fact]

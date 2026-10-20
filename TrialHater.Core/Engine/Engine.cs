@@ -9,15 +9,17 @@ namespace TrialHater.Core.Engine;
 // Card instances: 0-4 Blue's hand slots, 5-9 Red's, 10-18 cards already on the board at the
 // root (instance = 10 + cell). Ownership is one 9-bit mask (bit set = Blue owns the cell).
 //
-// Capture order for one placement (TriadBuddy's documented spec, shared by Saucy and ATTG; to be
-// confirmed against the client - docs/RULES.md):
+// Capture order for one placement (TriadBuddy's documented spec, shared by Saucy and ATTG, except
+// step 4 - docs/RULES.md):
 //   1. Ascension/Descension: every typed card is worth +-1 per card of its type already on the
 //      board, the placed card excluded; the shift is applied before comparing and clamped 1..A.
 //   2. Same / Plus on the placed card. Every occupied neighbour takes part, friendly ones
 //      included; the enemy ones among the matches flip and seed the combo.
 //   3. Plain captures from the placed card, with Reverse and Fallen Ace applied.
-//   4. Combo: each card flipped by step 2 (and then by this step) captures weaker enemy
-//      neighbours with a plain comparison - no Reverse, no Fallen Ace, no new Same/Plus.
+//   4. Combo: each card flipped by step 2 (and then by this step) captures enemy neighbours with
+//      the step 3 comparison, no new Same/Plus. The lineage ignores Reverse and Fallen Ace here;
+//      the client applies Reverse (19 Plus + Reverse placements, 2026-10-20), and Fallen Ace is
+//      assumed to follow the same comparison.
 //   5. The placed card's type count goes up, which shifts later placements.
 public sealed class Engine
 {
@@ -323,7 +325,7 @@ public sealed class Engine
             var nb = Neighbors[cell * 4 + side];
             if (nb < 0 || this.cells[nb] == Empty || this.IsBlue(nb) == blue)
                 continue;
-            if (this.Value(inst, side) <= this.Value(this.cells[nb], (side + 2) & 3))
+            if (!this.Beats(this.Value(inst, side), this.Value(this.cells[nb], (side + 2) & 3)))
                 continue;
             this.SetOwner(nb, blue);
             this.combo[comboCount++] = nb;
@@ -332,7 +334,8 @@ public sealed class Engine
         return comboCount;
     }
 
-    // Placement comparison (step 3). Fallen Ace: a 1 takes an A, and under Reverse an A takes a 1.
+    // Placement and combo comparison (steps 3 and 4). Fallen Ace: a 1 takes an A, and under Reverse
+    // an A takes a 1.
     private bool Beats(int mine, int theirs)
     {
         if (this.FallenAce)

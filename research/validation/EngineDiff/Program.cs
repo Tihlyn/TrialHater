@@ -9,6 +9,9 @@ using TriadRule = TrialHater.Core.Rules.TriadRule;
 
 // Usage: EngineDiff <cards.csv> [gamesPerRuleSet]
 // Plays random games move by move in both engines and compares ownership after every placement.
+// Deliberate departure (docs/RULES.md): our combo uses the placement comparison, Reverse and Fallen
+// Ace included; ATTG's does not. Rule sets where that can matter (Same or Plus with Reverse or
+// Fallen Ace) are reported but not counted as failures.
 var catalog = CardCatalog.FromCsv(args.Length > 0 ? args[0] : "../../data/cards.csv");
 var games = args.Length > 1 ? int.Parse(args[1]) : 5000;
 var table = new TriadCard[catalog.All.Max(c => c.Id) + 1];
@@ -32,6 +35,7 @@ var totalMoves = 0;
 var failures = 0;
 foreach (var set in sets)
 {
+    var departs = (set.Contains(TriadRule.Same) || set.Contains(TriadRule.Plus)) && (set.Contains(TriadRule.Reverse) || set.Contains(TriadRule.FallenAce));
     var mismatch = 0;
     for (var g = 0; g < games; g++)
     {
@@ -62,15 +66,16 @@ foreach (var set in sets)
             if (!same)
             {
                 mismatch++;
-                if (mismatch <= 2)
+                if (mismatch <= 2 && !departs)
                     Console.WriteLine($"  [{string.Join(",", set)}] game {g} move {ours.Placed}: ours {string.Concat(Enumerable.Range(0, 9).Select(c => ours.CellInstance(c) == Engine.Empty ? '.' : ours.IsBlue(c) ? 'B' : 'R'))} attg {string.Concat(state.Board.Select(b => b.IsEmpty ? '.' : b.Owner == TriadOwner.Blue ? 'B' : 'R'))}");
                 break;
             }
         }
     }
 
-    failures += mismatch;
-    Console.WriteLine($"{(set.Length == 0 ? "Plain" : string.Join("+", set)),-40} games {games,6}  mismatched games {mismatch}");
+    if (!departs)
+        failures += mismatch;
+    Console.WriteLine($"{(set.Length == 0 ? "Plain" : string.Join("+", set)),-40} games {games,6}  mismatched games {mismatch}{(departs ? " (expected: combo departure)" : "")}");
 }
 
 Console.WriteLine($"rule sets {sets.Count}, placements {totalMoves}, mismatched games {failures}");

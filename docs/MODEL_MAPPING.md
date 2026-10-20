@@ -186,3 +186,11 @@ Yellow Moon: our slot 2 <-> their slot 3. Yayake: 2 <-> 4. Tsuzura: 4 <-> 1. The
 **Sessions** started with the previous match's NPC as their target (`Tracker.NpcTriadId` outlives the match). Harmless here because each NPC's menu was already open, but an Interact step would have looked for the wrong NPC. `StartSession` now prefers the current target outside a match.
 
 **Reverse results:** Tsuzura (Chaos + Reverse) won 1 of 5 and Kaizan (Reverse, Descension) 1 of 5. ProbeReplay shows the rules were played correctly. The saved deck is built from high numbers (8744, 7A91, 7479, 7528, 5468), which lose under Reverse, and under Chaos the plugin cannot choose which card to play.
+
+## Session 9: 2026-10-20 11:14-12:55 UTC, Kaizan x10, Tsuzura x70, Nell Half-full x20, Gyoei x20
+
+No stall. 609 automatic placements, and 18 Swap matches (10 Kaizan, 8 Tsuzura), all resolved from the dealt hand ("swap: gave ..., received ..."). Results: Kaizan 8W 2D, Tsuzura 26W 28D 16L, Nell Half-full 20W, Gyoei 14W 4D 2L.
+
+**Combo follows Reverse.** ProbeReplay found 19 mismatches, all in Plus + Reverse matches (Gyoei, and 4 Tsuzura Plus rolls). Same + Reverse matches replayed fine because none had a combo. In every mismatch, a card flipped by Plus then combo-captured (or failed to capture) its neighbour the way Reverse says, not the plain comparison. The engine now uses the placement comparison for combos. After the fix: 176 matches, 1584 placements, 0 mismatches. The plugin went 14-4-2 against Gyoei while mispredicting combos both ways (flips that did not happen, and flips it did not expect).
+
+Tsuzura's Roulette never rolled Random or Order in 70 matches.
