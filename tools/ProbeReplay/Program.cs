@@ -32,6 +32,14 @@ foreach (var lines in matches.Where(m => m.Any(r => placement.IsMatch(r.GetPrope
     var events = lines.Select((r, i) => (Line: i, M: placement.Match(r.GetProperty("trigger").GetString()!))).Where(x => x.M.Success).ToList();
     var first = lines[events[0].Line];
 
+    // A plugin (re)loaded mid-match records from a board that already has cards on it; the hands
+    // and placements before that are unknown, so there is nothing to replay.
+    if (first.GetProperty("board") is { ValueKind: JsonValueKind.Array } start && start.EnumerateArray().Any(s => s.GetString() != "-"))
+    {
+        Console.WriteLine($"{first.GetProperty("time").GetDateTime():HH:mm} npc {first.GetProperty("npc").GetUInt32()}: skipped (recording starts mid-match)");
+        continue;
+    }
+
     // Both hands in play order, read from the board after each placement: slot order is not
     // needed to check captures, and a hand we could not see (the board's blue player when we sat
     // red, recorded before the reader mirrored it) still replays.
