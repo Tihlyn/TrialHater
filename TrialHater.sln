@@ -13,6 +13,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tools", "tools", "{07C2787E
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ProbeReplay", "tools\ProbeReplay\ProbeReplay.csproj", "{E1586062-163F-4054-9B30-628E907B0506}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DeckBench", "tools\DeckBench\DeckBench.csproj", "{9C30AA66-3EA0-44E5-BFE1-211522F78D0F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -71,11 +73,24 @@ Global
 		{E1586062-163F-4054-9B30-628E907B0506}.Release|x64.Build.0 = Release|Any CPU
 		{E1586062-163F-4054-9B30-628E907B0506}.Release|x86.ActiveCfg = Release|Any CPU
 		{E1586062-163F-4054-9B30-628E907B0506}.Release|x86.Build.0 = Release|Any CPU
+		{9C30AA66-3EA0-44E5-BFE1-211522F78D0F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9C30AA66-3EA0-44E5-BFE1-211522F78D0F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9C30AA66-3EA0-44E5-BFE1-211522F78D0F}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{9C30AA66-3EA0-44E5-BFE1-211522F78D0F}.Debug|x64.Build.0 = Debug|Any CPU
+		{9C30AA66-3EA0-44E5-BFE1-211522F78D0F}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{9C30AA66-3EA0-44E5-BFE1-211522F78D0F}.Debug|x86.Build.0 = Debug|Any CPU
+		{9C30AA66-3EA0-44E5-BFE1-211522F78D0F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9C30AA66-3EA0-44E5-BFE1-211522F78D0F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9C30AA66-3EA0-44E5-BFE1-211522F78D0F}.Release|x64.ActiveCfg = Release|Any CPU
+		{9C30AA66-3EA0-44E5-BFE1-211522F78D0F}.Release|x64.Build.0 = Release|Any CPU
+		{9C30AA66-3EA0-44E5-BFE1-211522F78D0F}.Release|x86.ActiveCfg = Release|Any CPU
+		{9C30AA66-3EA0-44E5-BFE1-211522F78D0F}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{E1586062-163F-4054-9B30-628E907B0506} = {07C2787E-EAC7-C090-1BA3-A61EC2A24D84}
+		{9C30AA66-3EA0-44E5-BFE1-211522F78D0F} = {07C2787E-EAC7-C090-1BA3-A61EC2A24D84}
 	EndGlobalSection
 EndGlobal

@@ -19,6 +19,7 @@ public sealed class Solver
     private const byte Upper = 3;
     private const byte NoMove = 255;
     private const int CancelCheckInterval = 4096;
+    private const double NullWindow = 1e-3;
 
     private readonly Entry[] table;
     private readonly int tableMask;
@@ -69,6 +70,10 @@ public sealed class Solver
     // Value of the current engine state for the side to move; used by evaluators that walk the
     // tree themselves and share this solver's table.
     public double Evaluate() => this.Negamax(-1, 1);
+
+    // Whether the current state is worth at least `bound` to the side to move: a null-window
+    // search, much cheaper than an exact value when only a threshold matters.
+    public bool AtLeast(double bound) => this.Negamax(bound - NullWindow, bound) >= bound;
 
     private List<MoveValue> ScoreRoot(bool fullWindow)
     {

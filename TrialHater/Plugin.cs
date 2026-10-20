@@ -6,6 +6,7 @@ using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using TrialHater.Core.Cards;
+using TrialHater.Core.Deck;
 using TrialHater.Core.Policy;
 using TrialHater.Core.Search;
 using TrialHater.Core.Session;
@@ -60,6 +61,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
             IdleInput.SendControl, IdleInput.ControlHeld) { Enabled = this.Configuration.AntiIdle };
         this.probe = new ModelProbe(Path.Combine(pluginInterface.GetPluginConfigDirectory(), "model_probe.jsonl"));
         this.journal = new MatchJournal(pluginInterface.GetPluginConfigDirectory(), (ex, msg) => log.Warning(ex, msg));
+        this.Decks = new DeckService((ex, msg) => log.Error(ex, msg));
         this.Tracker.Event += this.OnTrackerEvent;
         this.Tracker.RedMoved += this.journal.RedMoved;
         this.Tracker.MatchEnded += this.OnMatchEnded;
@@ -117,6 +119,8 @@ public sealed unsafe class Plugin : IDalamudPlugin
 
     public IdleGuard IdleGuard { get; }
 
+    public DeckService Decks { get; }
+
     public WindowSystem WindowSystem { get; }
 
     public MainWindow MainWindow { get; }
@@ -129,6 +133,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
     {
         this.framework.Update -= this.OnFrameworkUpdate;
         this.IdleGuard.Reset();
+        this.Decks.Dispose();
         this.Tracker.Event -= this.OnTrackerEvent;
         this.Tracker.RedMoved -= this.journal.RedMoved;
         this.Tracker.MatchEnded -= this.OnMatchEnded;
@@ -207,22 +212,46 @@ public sealed unsafe class Plugin : IDalamudPlugin
         this.IdleGuard.Tick(this.AutoPlayer.Enabled, this.Tracker.InMatch || this.Session.Active || inDuty, DateTime.UtcNow);
     }
 
-    // Farms the NPC we are facing: the one in the current match, else the current target, else
-    // the last match's (the target can be cleared once its menu is open).
+    // Farms the NPC we are facing.
     public string? StartSession()
     {
         if (this.Data is not { } data)
             return "sheets are still loading";
+        if (this.FacingNpc(data) is not { } npc)
+            return "target a Triple Triad NPC first";
+        this.SetAutoPlay(true);
+        this.Session.Start(npc.TriadId, npc.Name, this.Configuration.SessionMaxMatches);
+        return null;
+    }
+
+    // Searches the best decks from the collection against the NPC we are facing, under the rules
+    // its recorded matches had (sheet rules + regional ones), and scores the saved decks too.
+    public string? StartDeckSearch()
+    {
+        if (this.Data is not { } data)
+            return "sheets are still loading";
+        if (this.FacingNpc(data) is not { } npc)
+            return "target a Triple Triad NPC first";
+        var owned = Collection.Owned(data.Cards);
+        if (owned.Count < 5)
+            return "could not read the card collection";
+        this.journal.WriteOwned(owned);
+        var (rules, source) = DeckRules.ExpectedRules(npc, this.journal.RulesHistory(npc.TriadId));
+        this.Decks.Start(npc, rules, source, owned, Collection.SavedDecks(data.Cards), data.Cards);
+        this.Log.Information($"[Deck] searching decks against {npc.Name} [{rules}] ({source}), {owned.Count} owned cards");
+        return null;
+    }
+
+    // The NPC we are facing: the one in the current match, else the current target, else the
+    // last match's (the target can be cleared once its menu is open).
+    private NpcDeck? FacingNpc(GameData data)
+    {
         var triad = this.Tracker.InMatch ? this.Tracker.NpcTriadId : 0;
         if (triad == 0 && this.targets.Target is { } target && data.NpcBaseToTriad.TryGetValue(target.BaseId, out var targeted))
             triad = targeted;
         if (triad == 0)
             triad = this.Tracker.NpcTriadId;
-        if (triad == 0 || data.Npcs.Get(triad) is not { } npc)
-            return "target a Triple Triad NPC first";
-        this.SetAutoPlay(true);
-        this.Session.Start(triad, npc.Name, this.Configuration.SessionMaxMatches);
-        return null;
+        return triad == 0 ? null : data.Npcs.Get(triad);
     }
 
     // The board names its opponent (AtkValues[4]). If that is not the NPC we identified from the
@@ -260,26 +289,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
     }
 
     private IReadOnlyList<CardStats[]> SavedDecks(CardCatalog cards)
-    {
-        var decks = new List<CardStats[]>();
-        var module = GoldSaucerModule.Instance();
-        if (module == null)
-            return decks;
-        for (var i = 0; i < 10; i++)
-        {
-            var deck = module->GetDeck(i);
-            if (deck == null)
-                continue;
-            var stats = new List<CardStats>(5);
-            foreach (var id in deck->Cards)
-                if (cards.Get(id) is { } card)
-                    stats.Add(card.Stats);
-            if (stats.Count == 5)
-                decks.Add([.. stats]);
-        }
-
-        return decks;
-    }
+        => Collection.SavedDecks(cards).Select(d => d.Cards.Select(c => c.Stats).ToArray()).ToList();
 
     // autoPlayed = how many of our cards the auto player placed this match.
     private void OnMatchEnded(int blueCards)

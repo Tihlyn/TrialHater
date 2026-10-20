@@ -46,5 +46,7 @@ Target the NPC before challenging it. The target identifies the NPC's deck, and 
 | Journals | `matches.csv` (results), `npc_moves.jsonl` (NPC moves for the opponent model) |
 | Farming session (talk, challenge, deck, play, rematch, quit) | Working in game. 2026-10-19: 10-match session vs hall overseer (Chaos + Fallen Ace), 6W 4D 0L, every window action sent once. Two fixes from that run: the NPC-menu icon varies by NPC (71101/71102), and the session now quits through the last result window instead of ending before its buttons go live |
 | Open Tournament (Draft) | Matches auto-played after the fix for drafted decks; 2026-10-19: 2nd of 8. Draft picks and tournament windows are manual. The main window lists the next 10 tournaments and their rules |
-| Card registration, deck choice, travel between NPCs | Not built |
-| Not yet seen in game | Order, Reverse, Descension, Swap, Random, Roulette |
+| Deck builder | Main window, "Deck builder": best decks from the owned cards against the targeted NPC, and how the saved decks compare (`TrialHater.Core/Deck`, offline: `tools/DeckBench`). Choosing a saved deck in the session waits on mapping the deck list's row selection |
+| Anti-AFK | Control press when the game's idle counters pass 30 s during unattended auto play (ported from MahjongHater) |
+| Card registration, travel between NPCs, writing decks | Not built |
+| Not yet seen in game | Random; a combo deciding Fallen Ace (docs/RULES.md) |

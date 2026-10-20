@@ -44,6 +44,7 @@ public sealed class MainWindow : Window
 
         this.DrawHeader();
         this.DrawSession();
+        this.DrawDeckBuilder();
         this.DrawTournaments();
         var tracker = this.plugin.Tracker;
         if (tracker.View is not { } view)
@@ -139,6 +140,77 @@ public sealed class MainWindow : Window
         if (session.LastAction.Length > 0)
             ImGui.TextColored(MutedColor, $"last: {session.LastAction}");
     }
+
+    private string? deckError;
+
+    // Best decks from the collection against the NPC we face, and how the saved decks compare.
+    private void DrawDeckBuilder()
+    {
+        if (!ImGui.CollapsingHeader("Deck builder"))
+            return;
+        var decks = this.plugin.Decks;
+        if (decks.Running)
+        {
+            ImGui.TextColored(GoodColor, $"Searching against {decks.Npc?.Name}: {decks.Progress}");
+            ImGui.SameLine();
+            if (ImGui.SmallButton("Cancel"))
+                decks.Cancel();
+        }
+        else
+        {
+            if (ImGui.Button("Find the best deck"))
+                this.deckError = this.plugin.StartDeckSearch();
+            ImGui.SameLine();
+            ImGui.TextColored(MutedColor, "against the targeted NPC (or the last one played)");
+            if ((this.deckError ?? decks.Error) is { } error)
+                ImGui.TextColored(WarnColor, error);
+        }
+
+        if (decks.Npc is not { } npc)
+            return;
+        ImGui.TextColored(MutedColor, $"{npc.Name}: rules {string.Join(", ", decks.Rules.Rules.Select(this.RuleName))} ({decks.RulesSource})");
+        if (decks.Result is not { } result)
+            return;
+        ImGui.TextColored(MutedColor, result.Status);
+        ImGui.TextColored(MutedColor, "Expected = wins minus losses per game against the NPC model (+1 = always win).");
+        if (!ImGui.BeginTable("decks", 4, ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingStretchProp))
+            return;
+        ImGui.TableSetupColumn("Deck", ImGuiTableColumnFlags.WidthFixed, 70);
+        ImGui.TableSetupColumn("Expected", ImGuiTableColumnFlags.WidthFixed, 60);
+        ImGui.TableSetupColumn("W / D / L", ImGuiTableColumnFlags.WidthFixed, 100);
+        ImGui.TableSetupColumn("Cards (in play order)");
+        ImGui.TableHeadersRow();
+        for (var i = 0; i < result.Saved.Count && i < decks.Saved.Count; i++)
+            this.DeckRow(decks.Saved[i].Name, result.Saved[i], MutedColor);
+        for (var i = 0; i < result.Best.Count; i++)
+        {
+            var score = result.Best[i];
+            var same = decks.Saved.FirstOrDefault(d => SameCards(d.Cards, score.Cards));
+            this.DeckRow(same is null ? $"#{i + 1}" : $"#{i + 1} = {same.Name}", score, i == 0 ? GoodColor : new Vector4(1, 1, 1, 1));
+        }
+
+        ImGui.EndTable();
+        if (result.Best.Count > 0)
+            ImGui.TextColored(MutedColor, "Build #1 in a free deck slot (keep the card order under Order).");
+    }
+
+    private void DeckRow(string label, Core.Deck.DeckScore score, Vector4 color)
+    {
+        ImGui.TableNextRow();
+        ImGui.TableNextColumn();
+        ImGui.TextColored(color, label);
+        ImGui.TableNextColumn();
+        ImGui.TextColored(color, $"{score.Expected:+0.00;-0.00;0.00}");
+        ImGui.TableNextColumn();
+        ImGui.TextColored(color, $"{score.Win:P0} / {score.Draw:P0} / {score.Loss:P0}");
+        if (score.PerfectWin is { } pw && ImGui.IsItemHovered())
+            ImGui.SetTooltip($"With both hands known, perfect play: {pw:P0} win / {score.PerfectDraw:P0} draw / {score.PerfectLoss:P0} loss over the NPC's hands");
+        ImGui.TableNextColumn();
+        ImGui.TextColored(color, string.Join(", ", score.Cards.Select(c => $"{c.Name} {c.Stars}* [{c.Stats}]")));
+    }
+
+    private static bool SameCards(IReadOnlyList<Core.Cards.CardInfo> a, IReadOnlyList<Core.Cards.CardInfo> b)
+        => a.Select(c => c.Id).Order().SequenceEqual(b.Select(c => c.Id).Order());
 
     // The next Open Tournaments (Gold Saucer), computed from the sheet rotation, in local time.
     private void DrawTournaments()

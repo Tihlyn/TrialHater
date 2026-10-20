@@ -1,6 +1,7 @@
 using System.Text.Json;
 using TrialHater.Core.Cards;
 using TrialHater.Core.Match;
+using TrialHater.Core.Rules;
 
 namespace TrialHater.Game;
 
@@ -27,6 +28,48 @@ internal sealed class MatchJournal
         var name = (npc?.Name ?? tracker.Opponent ?? string.Empty).Replace(',', ' ');
         this.Append("matches.csv", MatchHeader,
             $"{DateTime.UtcNow:O},{tracker.NpcTriadId},{name},{tracker.Rules.ToString().Replace(", ", "+")},{tracker.Round},{blueCards},{outcome},{autoPlayed}");
+    }
+
+    // Rule sets of the recorded matches against this NPC, oldest first. The deck builder takes
+    // the rules a match will have from them (the sheet has no regional rules).
+    public List<RuleSet> RulesHistory(uint npcId)
+    {
+        var list = new List<RuleSet>();
+        var path = Path.Combine(this.folder, "matches.csv");
+        if (npcId == 0 || !File.Exists(path))
+            return list;
+        try
+        {
+            foreach (var line in File.ReadLines(path).Skip(1))
+            {
+                var fields = line.Split(',');
+                if (fields.Length < 4 || !uint.TryParse(fields[1], out var id) || id != npcId)
+                    continue;
+                list.Add(RuleSet.Of(fields[3].Split('+', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(r => Enum.TryParse<TriadRule>(r, out var rule) ? rule : TriadRule.None)));
+            }
+        }
+        catch (Exception ex)
+        {
+            this.warn(ex, "[Journal] failed to read matches.csv");
+        }
+
+        return list;
+    }
+
+    // The owned card ids, one per line (owned_cards.txt), so tools/DeckBench can use the real
+    // collection offline.
+    public void WriteOwned(IEnumerable<CardInfo> owned)
+    {
+        try
+        {
+            Directory.CreateDirectory(this.folder);
+            File.WriteAllLines(Path.Combine(this.folder, "owned_cards.txt"), owned.Select(c => c.Id.ToString()));
+        }
+        catch (Exception ex)
+        {
+            this.warn(ex, "[Journal] failed to write owned_cards.txt");
+        }
     }
 
     public void RedMoved(MatchView before, CardStats card, int cell)
