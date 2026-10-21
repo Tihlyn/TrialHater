@@ -6,7 +6,13 @@ CLAUDE.md
 
 # Research inputs that are large or third-party: pinned checkouts and the local Markdown tooling.
 docs/
-research/
+research/*
+# Except the game data the plugin embeds and the tests read.
+!research/data/
+research/data/*
+!research/data/cards.csv
+!research/data/npc-decks.csv
+!research/data/draft-decks.csv
 
 # Claude Code agent worktrees
 .claude/worktrees/
