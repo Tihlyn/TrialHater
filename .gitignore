@@ -6,8 +6,7 @@ CLAUDE.md
 
 # Research inputs that are large or third-party: pinned checkouts and the local Markdown tooling.
 docs/
-research/sources/
-research/.tools/
+research/
 
 # Claude Code agent worktrees
 .claude/worktrees/
