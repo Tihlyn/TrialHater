@@ -5,6 +5,8 @@ Notable changes are recorded here using the Keep a Changelog format and semantic
 
 ## Unreleased
 
+## [0.2.5] - 2026-10-21
+
 ### Changed
 
 - A finished farming session keeps its won/drawn/lost count on screen (status bar and Farming tab)
