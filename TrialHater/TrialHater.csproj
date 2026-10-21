@@ -45,6 +45,8 @@
   <ItemGroup>
     <!-- Drafted decks seen in past Open Tournaments: the draft advisor's picture of the field. -->
     <EmbeddedResource Include="..\research\data\draft-decks.csv" LogicalName="draft-decks.csv" />
+    <!-- The Triple Triad card template the windows are drawn with (Windows/CardArt.cs). -->
+    <EmbeddedResource Include="..\assets\Triple Triad Card Template.png" LogicalName="TrialHater.CardTemplate.png" />
   </ItemGroup>
 
   <ItemGroup>

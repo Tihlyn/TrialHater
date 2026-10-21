@@ -44,7 +44,8 @@ public sealed unsafe class Plugin : IDalamudPlugin
         IDataManager dataManager,
         ITargetManager targets,
         IObjectTable objects,
-        ICondition condition)
+        ICondition condition,
+        ITextureProvider textureProvider)
     {
         this.pluginInterface = pluginInterface;
         this.gameGui = gameGui;
@@ -90,12 +91,13 @@ public sealed unsafe class Plugin : IDalamudPlugin
             }
         });
 
+        CardArt.Initialize(textureProvider);
         this.WindowSystem = new WindowSystem("TrialHater");
         this.MainWindow = new MainWindow(this);
         this.ConfigWindow = new ConfigWindow(this.Configuration, this.IdleGuard);
         this.WindowSystem.AddWindow(this.MainWindow);
         this.WindowSystem.AddWindow(this.ConfigWindow);
-        this.MainWindow.IsOpen = this.Configuration.ShowOverlay;
+        this.MainWindow.IsOpen = this.Configuration.OpenAtStartup;
 
         commandManager.AddHandler(CommandName, new CommandInfo(this.OnCommand)
         {
@@ -108,6 +110,9 @@ public sealed unsafe class Plugin : IDalamudPlugin
         pluginInterface.UiBuilder.OpenConfigUi += this.OpenConfigUi;
         framework.Update += this.OnFrameworkUpdate;
     }
+
+    // "v1.2.3" from the assembly version (Directory.Build.props); the fourth part only when set.
+    public static string VersionText { get; } = FormatVersion(typeof(Plugin).Assembly.GetName().Version);
 
     public IPluginLog Log { get; }
 
@@ -477,11 +482,12 @@ public sealed unsafe class Plugin : IDalamudPlugin
                 break;
             default:
                 this.MainWindow.Toggle();
-                this.Configuration.ShowOverlay = this.MainWindow.IsOpen;
-                this.Configuration.Save();
                 break;
         }
     }
+
+    private static string FormatVersion(Version? version) => version is null ? "dev"
+        : version.Revision > 0 ? $"v{version}" : $"v{version.Major}.{version.Minor}.{Math.Max(0, version.Build)}";
 
     private void OpenMainUi() => this.MainWindow.IsOpen = true;
 

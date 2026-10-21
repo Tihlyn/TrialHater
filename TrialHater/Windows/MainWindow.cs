@@ -1,6 +1,8 @@
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Interface;
 using Dalamud.Interface.Windowing;
+using TrialHater.Core.Cards;
 using TrialHater.Core.Engine;
 using TrialHater.Core.Match;
 using TrialHater.Core.Policy;
@@ -9,435 +11,382 @@ using TrialHater.Core.Tournament;
 
 namespace TrialHater.Windows;
 
+// Shaped like a Triple Triad card. Always in view: auto play, what is running and the opponent.
+// Then the draft advisor (while drafting), the match (board, hands, the move to play) and tabs
+// for farming, decks, tournaments and the match log.
 public sealed class MainWindow : Window
 {
-    private static readonly Vector4 BlueColor = new(0.45f, 0.70f, 1f, 1f);
-    private static readonly Vector4 RedColor = new(1f, 0.45f, 0.45f, 1f);
-    private static readonly Vector4 MutedColor = new(0.6f, 0.6f, 0.6f, 1f);
-    private static readonly Vector4 GoodColor = new(0.4f, 0.9f, 0.5f, 1f);
-    private static readonly Vector4 WarnColor = new(1f, 0.8f, 0.3f, 1f);
+    private static readonly string[] CellNames = ["top left", "top", "top right", "left", "centre", "right", "bottom left", "bottom", "bottom right"];
 
     private readonly Plugin plugin;
+    private Theme.Scope theme;
+    private string? sessionError;
+    private string? deckError;
+    private string? writeError;
+    private string? tournamentError;
 
     public MainWindow(Plugin plugin)
-        : base("TrialHater###TrialHaterMain")
+        : base("TrialHater###TrialHaterMain", ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse)
     {
         this.plugin = plugin;
-        this.Size = new Vector2(560, 640);
+        this.Size = Theme.MainSize;
         this.SizeCondition = ImGuiCond.FirstUseEver;
+        this.SizeConstraints = new WindowSizeConstraints { MinimumSize = Theme.MainMinimum, MaximumSize = Theme.Maximum };
     }
 
-    public override void OnClose()
-    {
-        this.plugin.Configuration.ShowOverlay = false;
-        this.plugin.Configuration.Save();
-    }
+    public override void PreDraw() => this.theme = new Theme.Scope(this.plugin.Configuration.Backdrop);
+
+    public override void PostDraw() => this.theme.Dispose();
 
     public override void Draw()
     {
-        if (this.plugin.Data is null)
+        var config = this.plugin.Configuration;
+        var min = ImGui.GetWindowPos();
+        var max = min + ImGui.GetWindowSize();
+        Chrome.Backdrop(config.Backdrop, config.BackdropOpacity);
+        Chrome.PushInner();
+        switch (Chrome.Header("TrialHater", Plugin.VersionText, (FontAwesomeIcon.Cog, "Settings"), (FontAwesomeIcon.Times, "Close (/thater)")))
         {
-            ImGui.TextColored(this.plugin.DataError is null ? MutedColor : RedColor,
-                this.plugin.DataError is null ? "Loading Triple Triad sheets..." : $"Sheets failed to load: {this.plugin.DataError}");
-            return;
+            case 0:
+                this.plugin.ConfigWindow.Toggle();
+                break;
+            case 1:
+                this.IsOpen = false;
+                break;
         }
 
-        this.DrawHeader();
-        this.DrawSession();
-        this.DrawDeckBuilder();
-        this.DrawDraft();
-        this.DrawTournamentQueue();
-        this.DrawTournaments();
-        var tracker = this.plugin.Tracker;
-        if (tracker.View is not { } view)
-        {
-            ImGui.TextColored(MutedColor, "No match on screen.");
-            this.DrawNotes();
-            return;
-        }
-
-        var decision = this.plugin.Analysis.Latest;
-        var fresh = decision is not null && decision.Fingerprint == view.Fingerprint();
-        ImGui.Separator();
-        this.DrawBoard(view, fresh ? decision!.Move : null);
-        ImGui.Separator();
-        this.DrawDecision(view, fresh ? decision : null);
-        this.DrawNotes();
+        if (this.plugin.Data is not null)
+            this.DrawStatus();
+        var visible = Chrome.BeginBody("##body");
+        if (visible)
+            this.DrawBody();
+        Chrome.EndBody(visible, min, max);
+        Chrome.Footer($"{this.plugin.AutoPlayer.Placed} cards auto-placed  ·  anti-AFK: {this.plugin.IdleGuard.Status}");
+        Chrome.PopInner();
     }
 
-    private void DrawHeader()
+    private void DrawBody()
+    {
+        if (this.plugin.Data is null)
+        {
+            Widgets.Text(this.plugin.DataError is null ? "Loading the Triple Triad sheets..." : $"The sheets failed to load: {this.plugin.DataError}",
+                this.plugin.DataError is null ? Theme.Muted : Theme.Red);
+            return;
+        }
+
+        this.DrawDraft();
+        if (this.plugin.Tracker.View is { } view)
+            this.DrawMatch(view);
+        else
+            this.DrawIdle();
+
+        ImGui.Dummy(new Vector2(0f, Theme.Px(2f)));
+        if (!ImGui.BeginTabBar("##tabs"))
+            return;
+        if (ImGui.BeginTabItem("Farm"))
+        {
+            this.DrawSession();
+            ImGui.EndTabItem();
+        }
+
+        if (ImGui.BeginTabItem("Decks"))
+        {
+            this.DrawDeckBuilder();
+            ImGui.EndTabItem();
+        }
+
+        if (ImGui.BeginTabItem("Tournament"))
+        {
+            this.DrawTournamentQueue();
+            this.DrawTournaments();
+            ImGui.EndTabItem();
+        }
+
+        if (ImGui.BeginTabItem("Match log"))
+        {
+            this.DrawNotes();
+            ImGui.EndTabItem();
+        }
+
+        ImGui.EndTabBar();
+    }
+
+    // Auto play, whatever automation is running (with its stop button) and the opponent.
+    private void DrawStatus()
     {
         var plugin = this.plugin;
         var auto = plugin.AutoPlayer.Enabled;
-        if (ImGui.Checkbox("Auto play", ref auto))
+        if (Widgets.ToggleRow("Auto play", ref auto, "Place the recommended card on our turn. '/thater auto on|off' does the same."))
             plugin.SetAutoPlay(auto);
-        ImGui.SameLine();
-        ImGui.TextColored(auto ? GoodColor : MutedColor, plugin.AutoPlayer.Status);
-        ImGui.SameLine(ImGui.GetWindowWidth() - 80);
-        if (ImGui.SmallButton("Settings"))
-            plugin.ConfigWindow.IsOpen = true;
+        ImGui.SameLine(0f, Theme.Px(Theme.Gap * 2f));
+        Widgets.Text(plugin.AutoPlayer.Status, auto ? Theme.Good : Theme.Muted);
 
-        var tracker = plugin.Tracker;
-        var npc = plugin.CurrentNpc;
-        if (npc is null && tracker.InMatch && tracker.Opponent is { } opponent)
-        {
-            var known = tracker.View?.KnownDeck.Count ?? 0;
-            var deck = !tracker.Rules.Has(TriadRule.Draft) ? "no deck data, hidden cards sampled"
-                : known > 0 ? $"drafted deck, {known}/5 cards known from an earlier match"
-                : "drafted deck, hidden cards sampled";
-            ImGui.TextUnformatted($"Opponent: {opponent} ({deck})");
-        }
-        else
-            ImGui.TextUnformatted($"NPC: {npc?.Name ?? (tracker.NpcTriadId == 0 ? "unknown (target the NPC before challenging)" : $"#{tracker.NpcTriadId}")}");
-        if (tracker.InMatch)
-        {
-            ImGui.TextUnformatted($"Match #{tracker.MatchGeneration}{(tracker.Round > 0 ? $", Sudden Death round {tracker.Round}" : string.Empty)} | rules: {tracker.Rules}");
-            if (npc is not null && npc.Rules.Count > 0)
-                ImGui.TextColored(MutedColor, $"NPC sheet rules: {string.Join(", ", npc.Rules)}{(npc.UsesRegionalRules ? " + regional" : string.Empty)}");
-        }
-
-        if (tracker.Warning is { } warning)
-            ImGui.TextColored(WarnColor, warning);
-    }
-
-    private string? sessionError;
-
-    // Farming: talk, challenge, deck, auto play, rematch until the goal, quit.
-    private void DrawSession()
-    {
-        var session = this.plugin.Session;
-        var config = this.plugin.Configuration;
-        if (!ImGui.CollapsingHeader("Session", ImGuiTreeNodeFlags.DefaultOpen))
-            return;
-
-        if (!session.Active)
-        {
-            var max = config.SessionMaxMatches;
-            ImGui.SetNextItemWidth(120);
-            if (ImGui.InputInt("Matches (0 = until stopped)", ref max))
-            {
-                config.SessionMaxMatches = max;
-                config.Save();
-            }
-
-            if (ImGui.Button("Start session"))
-                this.sessionError = this.plugin.StartSession();
-            ImGui.SameLine();
-            ImGui.TextColored(MutedColor, "target the NPC, stand next to it");
-            if (this.sessionError is { } error)
-                ImGui.TextColored(WarnColor, error);
-        }
-        else
+        var session = plugin.Session;
+        if (session.Active)
         {
             var goal = session.MaxMatches == 0 ? "until stopped" : $"{session.MatchesDone}/{session.MaxMatches}";
-            ImGui.TextUnformatted($"Farming {session.NpcName}: {goal} | {session.Wins}W {session.Draws}D {session.Losses}L");
-            if (!session.StopRequested && ImGui.Button("Stop after this match"))
-                session.StopRequested = true;
+            this.Activity("FARMING", $"{session.NpcName}  {goal}  ·  {session.Wins}W {session.Draws}D {session.Losses}L");
+            if (!session.StopRequested)
+            {
+                ImGui.SameLine();
+                if (ImGui.SmallButton("Stop after this match"))
+                    session.StopRequested = true;
+            }
+
             ImGui.SameLine();
-            if (ImGui.Button("Stop now"))
+            if (ImGui.SmallButton("Stop##session"))
                 session.Stop("stopped by the player");
         }
 
-        ImGui.TextColored(session.Active ? GoodColor : MutedColor, session.Status);
-        if (config.SessionPicksDeck && this.plugin.DeckChooser.Summary.Length > 0)
-            ImGui.TextColored(MutedColor, this.plugin.DeckChooser.Summary);
-        if (config.SessionBuildsDeck && this.plugin.DeckPrep.Summary.Length > 0)
-            ImGui.TextColored(MutedColor, $"deck building: {this.plugin.DeckPrep.Summary}");
-        if (session.LastAction.Length > 0)
-            ImGui.TextColored(MutedColor, $"last: {session.LastAction}");
+        var tournament = plugin.Tournament;
+        if (tournament.Active)
+        {
+            var goal = tournament.MaxTournaments == 0 ? "until stopped" : $"{tournament.TournamentsDone}/{tournament.MaxTournaments}";
+            this.Activity("TOURNAMENT", $"{goal}  ·  {tournament.Phase}");
+            ImGui.SameLine();
+            if (ImGui.SmallButton("Stop##tournament"))
+                tournament.Stop("stopped by the player");
+        }
+
+        if (plugin.DeckWriter.Active)
+        {
+            this.Activity("WRITING DECK", plugin.DeckWriter.Status);
+            ImGui.SameLine();
+            if (ImGui.SmallButton("Stop##writer"))
+                plugin.DeckWriter.Stop("stopped by the player");
+        }
+
+        if (plugin.Decks.Running)
+        {
+            this.Activity("DECK SEARCH", $"{plugin.Decks.Npc?.Name}: {plugin.Decks.Progress}");
+            ImGui.SameLine();
+            if (ImGui.SmallButton("Cancel##decks"))
+                plugin.Decks.Cancel();
+        }
+
+        this.DrawOpponent();
+        if (plugin.Tracker.Warning is { } warning)
+            Widgets.Text(warning, Theme.Warn);
+        Widgets.Ornament();
     }
 
-    private string? deckError;
-
-    // Best decks from the collection against the NPC we face, and how the saved decks compare.
-    private void DrawDeckBuilder()
+    private void Activity(string label, string text)
     {
-        if (!ImGui.CollapsingHeader("Deck builder"))
-            return;
-        var decks = this.plugin.Decks;
-        if (decks.Running)
+        Widgets.Chip(label, Theme.Good);
+        ImGui.SameLine(0f, Theme.Px(Theme.Gap));
+        ImGui.TextUnformatted(text);
+    }
+
+    private void DrawOpponent()
+    {
+        var tracker = this.plugin.Tracker;
+        var npc = this.plugin.CurrentNpc;
+        string name, detail = string.Empty;
+        if (npc is null && tracker.InMatch && tracker.Opponent is { } opponent)
         {
-            ImGui.TextColored(GoodColor, $"Searching against {decks.Npc?.Name}: {decks.Progress}");
-            ImGui.SameLine();
-            if (ImGui.SmallButton("Cancel"))
-                decks.Cancel();
+            var known = tracker.View?.KnownDeck.Count ?? 0;
+            name = opponent;
+            detail = !tracker.Rules.Has(TriadRule.Draft) ? "no deck data, hidden cards sampled"
+                : known > 0 ? $"drafted deck, {known}/5 cards known from an earlier match"
+                : "drafted deck, hidden cards sampled";
+        }
+        else if (npc is not null)
+        {
+            name = npc.Name;
+        }
+        else if (tracker.NpcTriadId != 0)
+        {
+            name = $"#{tracker.NpcTriadId}";
         }
         else
         {
-            if (ImGui.Button("Find the best deck"))
-                this.deckError = this.plugin.StartDeckSearch();
+            Widgets.Muted("No NPC yet: target one before challenging it.");
+            return;
+        }
+
+        Widgets.OutlinedText(ImGui.GetWindowDrawList(), ImGui.GetCursorScreenPos(), name, Theme.Red);
+        ImGui.Dummy(ImGui.CalcTextSize(name));
+        if (detail.Length > 0)
+        {
             ImGui.SameLine();
-            ImGui.TextColored(MutedColor, "against the targeted NPC (or the last one played)");
-            if ((this.deckError ?? decks.Error) is { } error)
-                ImGui.TextColored(WarnColor, error);
+            Widgets.Muted(detail);
         }
 
-        if (decks.Npc is not { } npc)
-            return;
-        ImGui.TextColored(MutedColor, $"{npc.Name}: rules {string.Join(", ", decks.Rules.Rules.Select(this.RuleName))} ({decks.RulesSource})");
-        if (decks.Result is not { } result)
-            return;
-        ImGui.TextColored(MutedColor, result.Status);
-        ImGui.TextColored(MutedColor, "Expected = wins minus losses per game against the NPC model (+1 = always win).");
-        if (!ImGui.BeginTable("decks", 4, ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingStretchProp))
-            return;
-        ImGui.TableSetupColumn("Deck", ImGuiTableColumnFlags.WidthFixed, 70);
-        ImGui.TableSetupColumn("Expected", ImGuiTableColumnFlags.WidthFixed, 60);
-        ImGui.TableSetupColumn("W / D / L", ImGuiTableColumnFlags.WidthFixed, 100);
-        ImGui.TableSetupColumn("Cards (in play order)");
-        ImGui.TableHeadersRow();
-        for (var i = 0; i < result.Saved.Count && i < decks.Saved.Count; i++)
-            this.DeckRow(decks.Saved[i].Name, result.Saved[i], MutedColor);
-        for (var i = 0; i < result.Best.Count; i++)
+        if (tracker.InMatch)
         {
-            var score = result.Best[i];
-            var same = decks.Saved.FirstOrDefault(d => SameCards(d.Cards, score.Cards));
-            this.DeckRow(same is null ? $"#{i + 1}" : $"#{i + 1} = {same.Name}", score, i == 0 ? GoodColor : new Vector4(1, 1, 1, 1));
+            var chips = new List<(string, Vector4)> { ($"Match {tracker.MatchGeneration}", Theme.Muted) };
+            if (tracker.Round > 0)
+                chips.Add(($"Sudden Death {tracker.Round}", Theme.Warn));
+            chips.AddRange(tracker.Rules.Rules.Select(r => (this.RuleName(r), Theme.Gold)));
+            Widgets.Chips(chips);
         }
-
-        ImGui.EndTable();
-        this.DrawDeckWrite(result.Best.Count > 0 ? result.Best[0].Cards : null);
-    }
-
-    private string? writeError;
-
-    // Writes the best deck into the slot the settings allow (Gold Saucer deck editor).
-    private void DrawDeckWrite(IReadOnlyList<Core.Cards.CardInfo>? best)
-    {
-        var writer = this.plugin.DeckWriter;
-        var slot = this.plugin.Configuration.DeckWriteSlot;
-        if (writer.Active)
+        else if (npc is not null && npc.Rules.Count > 0)
         {
-            ImGui.TextColored(GoodColor, $"Writing: {writer.Status}");
-            ImGui.SameLine();
-            if (ImGui.SmallButton("Stop writing"))
-                writer.Stop("stopped by the player");
-            return;
-        }
-
-        if (best is not null && slot >= 0)
-        {
-            var current = this.plugin.Decks.Saved.FirstOrDefault(d => d.Index == slot);
-            if (ImGui.Button($"Write #1 to Deck {slot + 1}"))
-                this.writeError = this.plugin.StartDeckWrite(best);
-            ImGui.SameLine();
-            ImGui.TextColored(MutedColor, current is null ? "(empty slot)" : $"(replaces {current.Name}: {string.Join(", ", current.Cards.Select(c => c.Name))})");
-        }
-        else if (best is not null)
-        {
-            ImGui.TextColored(MutedColor, "Build #1 in a free deck slot, or allow a slot in Settings to have it written.");
-        }
-
-        if ((this.writeError ?? (writer.Status.Length > 0 ? writer.Status : null)) is { } status)
-            ImGui.TextColored(status.StartsWith("done", StringComparison.Ordinal) ? GoodColor : WarnColor, status);
-    }
-
-    private void DeckRow(string label, Core.Deck.DeckScore score, Vector4 color)
-    {
-        ImGui.TableNextRow();
-        ImGui.TableNextColumn();
-        ImGui.TextColored(color, label);
-        ImGui.TableNextColumn();
-        ImGui.TextColored(color, $"{score.Expected:+0.00;-0.00;0.00}");
-        ImGui.TableNextColumn();
-        ImGui.TextColored(color, $"{score.Win:P0} / {score.Draw:P0} / {score.Loss:P0}");
-        if (score.PerfectWin is { } pw && ImGui.IsItemHovered())
-            ImGui.SetTooltip($"With both hands known, perfect play: {pw:P0} win / {score.PerfectDraw:P0} draw / {score.PerfectLoss:P0} loss over the NPC's hands");
-        ImGui.TableNextColumn();
-        ImGui.TextColored(color, string.Join(", ", score.Cards.Select(c => $"{c.Name} {c.Stars}* [{c.Stats}]")));
-    }
-
-    private static bool SameCards(IReadOnlyList<Core.Cards.CardInfo> a, IReadOnlyList<Core.Cards.CardInfo> b)
-        => a.Select(c => c.Id).Order().SequenceEqual(b.Select(c => c.Id).Order());
-
-    // Open Tournament draft: the best card of each rarity among the offered ones (you click them).
-    private void DrawDraft()
-    {
-        var draft = this.plugin.Draft;
-        if (draft.Offer.Count == 0 || !ImGui.CollapsingHeader("Draft advisor", ImGuiTreeNodeFlags.DefaultOpen))
-            return;
-        ImGui.TextColored(MutedColor, $"Tournament rules: {string.Join(", ", draft.Rules.Rules.Select(this.RuleName))}");
-        if (draft.Running || draft.Advice is not { } advice)
-        {
-            ImGui.TextColored(draft.Running ? GoodColor : WarnColor, draft.Status);
-            return;
-        }
-
-        if (advice.Picks.Count == 0)
-        {
-            ImGui.TextColored(WarnColor, advice.Status);
-            return;
-        }
-
-        var best = advice.Ranked[0];
-        if (draft.ConfirmDiff is { } diff)
-        {
-            if (diff.Count == 0)
-                ImGui.TextColored(GoodColor, "Deck to confirm = the advised deck.");
-            foreach (var (picked, advised) in diff)
-                ImGui.TextColored(WarnColor, $"Deck to confirm has {picked.Name} ({picked.Stars}*), but the advice was {advised.Name}.");
-        }
-
-        ImGui.TextUnformatted($"Best deck: {best.Expected:+0.00;-0.00;0.00} per game ({best.Win:P0} wins, {best.Loss:P0} losses in simulation)");
-        // One row per pick, its three options in window order (pairs are taken together).
-        if (!ImGui.BeginTable("draft", 4, ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingStretchProp))
-            return;
-        ImGui.TableSetupColumn("Pick", ImGuiTableColumnFlags.WidthFixed, 40);
-        ImGui.TableSetupColumn("Option 1");
-        ImGui.TableSetupColumn("Option 2");
-        ImGui.TableSetupColumn("Option 3");
-        ImGui.TableHeadersRow();
-        for (var pick = 0; pick < 3; pick++)
-        {
-            ImGui.TableNextRow();
-            ImGui.TableNextColumn();
-            ImGui.TextUnformatted($"{pick + 1}");
-            foreach (var option in advice.Options.Where(o => o.Pick == pick).OrderBy(o => o.Choice))
-            {
-                ImGui.TableNextColumn();
-                var chosen = advice.Best[pick].Choice == option.Choice;
-                var cards = string.Join(" + ", option.Cards.Select(c => $"{c.Name} {c.Stars}*"));
-                ImGui.TextColored(chosen ? GoodColor : MutedColor, chosen ? $"> {cards}" : $"{cards} {option.Value - best.Expected:+0.00;-0.00;0.00}");
-            }
-        }
-
-        ImGui.EndTable();
-        ImGui.TextColored(MutedColor, "Take the green option of each pick. Others: the best deck with that option, compared with the best deck.");
-        ImGui.TextColored(MutedColor, advice.Status);
-    }
-
-    private string? tournamentError;
-
-    // Queue for Open Tournaments with the targeted Official and play them through.
-    private void DrawTournamentQueue()
-    {
-        var runner = this.plugin.Tournament;
-        var config = this.plugin.Configuration;
-        if (!ImGui.CollapsingHeader("Open Tournament queue"))
-            return;
-        if (!runner.Active)
-        {
-            var count = config.TournamentCount;
-            ImGui.SetNextItemWidth(120);
-            if (ImGui.InputInt("Tournaments (0 = until stopped)", ref count))
-            {
-                config.TournamentCount = Math.Max(0, count);
-                config.Save();
-            }
-
-            if (ImGui.Button("Queue"))
-                this.tournamentError = this.plugin.StartTournament();
-            ImGui.SameLine();
-            ImGui.TextColored(MutedColor, "target the Open Tournament Official, stand next to it");
-            if (this.tournamentError is { } error)
-                ImGui.TextColored(WarnColor, error);
-        }
-        else
-        {
-            var goal = runner.MaxTournaments == 0 ? "until stopped" : $"{runner.TournamentsDone}/{runner.MaxTournaments}";
-            ImGui.TextUnformatted($"Open Tournament: {goal} | {runner.Phase}");
-            if (ImGui.Button("Stop queueing"))
-                runner.Stop("stopped by the player");
-        }
-
-        ImGui.TextColored(runner.Active ? GoodColor : MutedColor, runner.Status);
-        if (runner.LastAction.Length > 0)
-            ImGui.TextColored(MutedColor, $"last: {runner.LastAction}");
-    }
-
-    // The next Open Tournaments (Gold Saucer), computed from the sheet rotation, in local time.
-    private void DrawTournaments()
-    {
-        var rows = this.plugin.Data!.TournamentRules;
-        if (rows.Count == 0 || !ImGui.CollapsingHeader("Open Tournament schedule"))
-            return;
-        foreach (var t in OpenTournament.Upcoming(rows, DateTimeOffset.UtcNow, 10))
-        {
-            var advanced = t.Rules.Rules.Count() > 1;
-            ImGui.TextColored(advanced ? GoodColor : MutedColor, $"{t.StartUtc.ToLocalTime():ddd HH:mm}  {string.Join(", ", t.Rules.Rules.Select(this.RuleName))}");
+            Widgets.Chips(npc.Rules.Select(r => (this.RuleName(r), Theme.Alpha(Theme.Gold, 0.75f)))
+                .Append((npc.UsesRegionalRules ? "+ regional rules" : "sheet rules", Theme.Muted)));
         }
     }
 
-    private string RuleName(TriadRule rule) => this.plugin.Data!.RuleNames.GetValueOrDefault(rule, rule.ToString());
-
-    private void DrawBoard(MatchView view, Move? recommended)
+    private void DrawIdle()
     {
-        ImGui.TextUnformatted($"{(view.ToMove == Side.Blue ? "Our turn" : "Opponent's turn")}{(view.ForcedSlot >= 0 ? $" (forced slot {view.ForcedSlot})" : string.Empty)}");
-        if (ImGui.BeginTable("hands", 2, ImGuiTableFlags.SizingStretchSame))
+        using (Widgets.Panel())
         {
-            ImGui.TableNextColumn();
-            ImGui.TextColored(BlueColor, "Our hand");
-            for (var i = 0; i < view.Blue.Length; i++)
-            {
-                var mark = recommended?.HandSlot == i ? " <-" : string.Empty;
-                ImGui.TextColored(recommended?.HandSlot == i ? GoodColor : BlueColor, $"{i}: {view.Blue[i]}{mark}");
-            }
+            Widgets.DisplayText("No match on screen", Theme.HeadlineScale, Theme.Muted);
+            Widgets.Muted("Target an NPC and challenge it: the board, both hands and the move to play show here.");
+        }
+    }
 
-            ImGui.TableNextColumn();
-            ImGui.TextColored(RedColor, "NPC hand");
-            for (var i = 0; i < view.Red.Length; i++)
-                ImGui.TextColored(view.Red[i].State == SlotState.Hidden ? MutedColor : RedColor, $"{i}: {view.Red[i]}");
-            if (view.RedPlayed.Count > 0)
-                ImGui.TextColored(MutedColor, $"played: {string.Join(" ", view.RedPlayed)}");
-            ImGui.EndTable();
+    // The match as the game lays it out: our hand, the board, the NPC's hand; scores on the
+    // medallions; the move to play glowing green, then what it guarantees.
+    private void DrawMatch(MatchView view)
+    {
+        var decision = this.plugin.Analysis.Latest;
+        var fresh = decision is not null && decision.Fingerprint == view.Fingerprint() ? decision : null;
+        var recommended = fresh?.Status == DecisionStatus.Ready ? fresh.Move : null;
+        using (Widgets.Panel(view.ToMove == Side.Blue))
+        {
+            this.DrawTable(view, recommended);
+            this.DrawDecision(view, fresh);
+        }
+    }
+
+    private void DrawTable(MatchView view, Move? recommended)
+    {
+        var draw = ImGui.GetWindowDrawList();
+        var avail = Widgets.ContentWidth;
+        var g = Theme.Px(4f);
+        var groupGap = Theme.Px(12f);
+        const float handRatio = 0.72f, aspect = 1.26f;
+        var cardW = Math.Clamp((avail - 2f * groupGap - 4f * g) / (3f + 4f * handRatio), Theme.Px(36f), Theme.Px(96f));
+        var cardH = cardW * aspect;
+        var handW = cardW * handRatio;
+        var handH = handW * aspect;
+        var boardW = 3f * cardW + 2f * g;
+        var boardH = 3f * cardH + 2f * g;
+        var handColumn = 2f * handW + g;
+        var total = 2f * handColumn + boardW + 2f * groupGap;
+
+        // Score row: medallions over the hands, whose turn over the board.
+        var radius = Theme.Px(15f);
+        var top = ImGui.GetCursorScreenPos();
+        var left = top.X + Math.Max(0f, (avail - total) / 2f);
+        var blueX = left + handColumn / 2f;
+        var boardX = left + handColumn + groupGap;
+        var redX = boardX + boardW + groupGap + handColumn / 2f;
+        var blueScore = view.Board.Count(c => c?.Owner == Side.Blue) + view.Blue.Count(s => s.State != SlotState.Empty);
+        var redScore = view.Board.Count(c => c?.Owner == Side.Red) + view.Red.Count(s => s.State != SlotState.Empty);
+        Widgets.Medallion(draw, new Vector2(blueX, top.Y + radius), radius, Side.Blue, blueScore);
+        Widgets.Medallion(draw, new Vector2(redX, top.Y + radius), radius, Side.Red, redScore);
+        var ours = view.ToMove == Side.Blue;
+        var turn = ours ? "Your turn" : "NPC's turn";
+        Widgets.CenteredText(draw, new Vector2(boardX + boardW / 2f, top.Y + radius), turn, ours ? Theme.Good : Theme.Red, 1.15f);
+        var y = top.Y + 2f * radius + Theme.Px(Theme.Gap);
+
+        // Hands, centred on the board vertically: two columns, the fifth card centred.
+        var handTop = y + (boardH - (3f * handH + 2f * g)) / 2f;
+        for (var i = 0; i < 5; i++)
+        {
+            var offset = new Vector2(i == 4 ? (handW + g) / 2f : i % 2 * (handW + g), i / 2 * (handH + g));
+            var blueMin = new Vector2(left, handTop) + offset;
+            var redMin = new Vector2(boardX + boardW + groupGap, handTop) + offset;
+            this.HandCard(draw, blueMin, blueMin + new Vector2(handW, handH), view.Blue[i], Side.Blue,
+                recommended?.HandSlot == i, view.ForcedSlot == i && ours);
+            this.HandCard(draw, redMin, redMin + new Vector2(handW, handH), view.Red[i], Side.Red, false, false);
         }
 
-        if (!ImGui.BeginTable("board", 3, ImGuiTableFlags.Borders | ImGuiTableFlags.SizingFixedFit))
-            return;
         for (var cell = 0; cell < 9; cell++)
         {
-            if (cell % 3 == 0)
-                ImGui.TableNextRow(ImGuiTableRowFlags.None, 64);
-            ImGui.TableNextColumn();
-            if (recommended?.Cell == cell)
-                ImGui.TableSetBgColor(ImGuiTableBgTarget.CellBg, ImGui.GetColorU32(new Vector4(0.2f, 0.5f, 0.25f, 0.6f)));
-            if (view.Board[cell] is { } card)
+            var min = new Vector2(boardX + cell % 3 * (cardW + g), y + cell / 3 * (cardH + g));
+            var max = min + new Vector2(cardW, cardH);
+            if (view.Board[cell] is { } placed)
             {
-                var color = card.Owner == Side.Blue ? BlueColor : RedColor;
-                var c = card.Card;
-                ImGui.TextColored(color, $"   {Glyph(c.Up)}");
-                ImGui.TextColored(color, $" {Glyph(c.Left)}   {Glyph(c.Right)}");
-                ImGui.TextColored(color, $"   {Glyph(c.Down)} {(c.Type == Core.Cards.CardType.None ? string.Empty : c.Type.ToString()[..1])}");
+                Widgets.CardFace(draw, min, max, placed.Card, placed.Owner);
+                if (Hovering(min, max))
+                    Widgets.Tooltip($"{(placed.Owner == Side.Blue ? "Ours" : "NPC's")}: {Describe(placed.Card)}");
+            }
+            else if (recommended?.Cell == cell && view.Blue[recommended.Value.HandSlot] is { State: SlotState.Visible } slot)
+            {
+                Widgets.EmptyCard(draw, min, max);
+                Widgets.CardFace(draw, min, max, slot.Card, Side.Blue, 0.45f);
+                Widgets.Glow(draw, min, max, Theme.Good);
             }
             else
             {
-                ImGui.TextColored(MutedColor, $"  [{cell}]   ");
+                Widgets.EmptyCard(draw, min, max, CellNames[cell]);
             }
         }
 
-        ImGui.EndTable();
+        ImGui.SetCursorScreenPos(new Vector2(top.X, y));
+        ImGui.Dummy(new Vector2(avail, boardH + Theme.Px(Theme.SmallGap)));
+    }
+
+    private void HandCard(ImDrawListPtr draw, Vector2 min, Vector2 max, HandSlot slot, Side side, bool recommended, bool forced)
+    {
+        switch (slot.State)
+        {
+            case SlotState.Visible:
+                Widgets.CardFace(draw, min, max, slot.Card, side);
+                if (Hovering(min, max))
+                    Widgets.Tooltip(Describe(slot.Card) + (forced ? "\nThe rules force this card." : string.Empty));
+                break;
+            case SlotState.Hidden:
+                Widgets.CardBack(draw, min, max);
+                if (Hovering(min, max))
+                    Widgets.Tooltip("Hidden: the solver weighs every card the NPC's deck could hold here.");
+                break;
+            default:
+                Widgets.EmptyCard(draw, min, max);
+                break;
+        }
+
+        if (recommended)
+            Widgets.Glow(draw, min, max, Theme.Good);
+        else if (forced)
+            Widgets.Glow(draw, min, max, Theme.Gold);
     }
 
     private void DrawDecision(MatchView view, Decision? decision)
     {
         if (view.ToMove != Side.Blue)
         {
-            ImGui.TextColored(MutedColor, "Waiting for the NPC.");
+            Widgets.Muted("Waiting for the NPC...");
             return;
         }
 
         if (decision is null)
         {
-            ImGui.TextColored(MutedColor, this.plugin.Analysis.Busy ? "Solving..." : "No decision yet.");
+            Widgets.Muted(this.plugin.Analysis.Busy ? "Solving..." : "No decision yet.");
             return;
         }
 
         if (decision.Status != DecisionStatus.Ready || decision.Chosen is not { } chosen)
         {
-            ImGui.TextColored(WarnColor, $"{decision.Status}: {decision.Reason}");
+            Widgets.Text($"{decision.Status}: {decision.Reason}", Theme.Warn);
             return;
         }
 
-        ImGui.TextColored(GoodColor, $"Play slot {chosen.Move.HandSlot} ({view.Blue[chosen.Move.HandSlot]}) on cell {chosen.Move.Cell}");
-        ImGui.TextUnformatted($"Guaranteed (expected over {decision.Hypotheses} NPC hand(s)): {Outcome(chosen.ExpectedValue)}; worst hand {Outcome(chosen.WorstValue)}"
-                              + (chosen.Exploit is { } e ? $"; vs NPC model {e:+0.00;-0.00}" : string.Empty));
-        ImGui.TextColored(MutedColor, $"{decision.Reason} | {decision.Belief} | {decision.Nodes:N0} nodes, {decision.Elapsed.TotalMilliseconds:0} ms");
+        var card = view.Blue[chosen.Move.HandSlot];
+        Widgets.DisplayText($"Play {card} on the {CellNames[chosen.Move.Cell]}", Theme.HeadlineScale, Theme.Good);
+        Widgets.HoverTooltip($"Hand card {chosen.Move.HandSlot + 1} ({Describe(card.Card)}) to cell {chosen.Move.Cell}.");
+        var chips = new List<(string, Vector4)>
+        {
+            ($"Guaranteed {Outcome(chosen.ExpectedValue)}", OutcomeColor(chosen.ExpectedValue)),
+            ($"Worst hand: {Outcome(chosen.WorstValue)}", OutcomeColor(chosen.WorstValue)),
+        };
+        if (chosen.Exploit is { } exploit)
+            chips.Add(($"vs NPC model {exploit:+0.00;-0.00;0.00}", Theme.Blue));
+        Widgets.Chips(chips);
+        Widgets.Muted($"{decision.Hypotheses} NPC hand(s) · {decision.Nodes:N0} nodes · {decision.Elapsed.TotalMilliseconds:0} ms · {decision.Reason}");
 
         if (!ImGui.CollapsingHeader($"All moves ({decision.Moves.Count})"))
             return;
-        if (!ImGui.BeginTable("moves", 6, ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY | ImGuiTableFlags.SizingStretchProp, new Vector2(0, 220)))
+        if (view.RedPlayed.Count > 0)
+            Widgets.Muted($"NPC played: {string.Join("  ", view.RedPlayed)}");
+        Widgets.Muted(decision.Belief);
+        if (!ImGui.BeginTable("moves", 6, ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY | ImGuiTableFlags.SizingStretchProp, new Vector2(0f, Theme.Px(200f))))
             return;
-        ImGui.TableSetupColumn("Slot");
+        ImGui.TableSetupScrollFreeze(0, 1);
+        ImGui.TableSetupColumn("Card");
         ImGui.TableSetupColumn("Cell");
         ImGui.TableSetupColumn("Expected");
         ImGui.TableSetupColumn("Worst");
@@ -447,19 +396,276 @@ public sealed class MainWindow : Window
         foreach (var m in decision.Moves)
         {
             ImGui.TableNextRow();
-            var color = m.Move == chosen.Move ? GoodColor : m.Safe ? new Vector4(1, 1, 1, 1) : MutedColor;
-            ImGui.TableNextColumn();
-            ImGui.TextColored(color, m.Move.HandSlot.ToString());
-            ImGui.TableNextColumn();
-            ImGui.TextColored(color, m.Move.Cell.ToString());
-            ImGui.TableNextColumn();
-            ImGui.TextColored(color, $"{m.ExpectedValue:+0.00;-0.00;0.00}");
-            ImGui.TableNextColumn();
-            ImGui.TextColored(color, $"{m.WorstValue:+0;-0;0}");
-            ImGui.TableNextColumn();
-            ImGui.TextColored(color, m.Exploit is { } x ? $"{x:+0.00;-0.00;0.00}" : "-");
-            ImGui.TableNextColumn();
-            ImGui.TextColored(color, m.Captures.ToString());
+            var color = m.Move == chosen.Move ? Theme.Good : m.Safe ? Theme.Text : Theme.Muted;
+            Cell(view.Blue[m.Move.HandSlot].ToString(), color);
+            Cell(CellNames[m.Move.Cell], color);
+            Cell($"{m.ExpectedValue:+0.00;-0.00;0.00}", color);
+            Cell($"{m.WorstValue:+0;-0;0}", color);
+            Cell(m.Exploit is { } x ? $"{x:+0.00;-0.00;0.00}" : "-", color);
+            Cell(m.Captures.ToString(), color);
+        }
+
+        ImGui.EndTable();
+    }
+
+    // Open Tournament draft: the option to take at each pick (you press them, or auto play does).
+    private void DrawDraft()
+    {
+        var draft = this.plugin.Draft;
+        if (draft.Offer.Count == 0)
+            return;
+        using (Widgets.Panel(true))
+        {
+            Widgets.Section("Draft advisor");
+            Widgets.Chips(draft.Rules.Rules.Select(r => (this.RuleName(r), Theme.Gold)));
+            if (draft.Running || draft.Advice is not { } advice)
+            {
+                Widgets.Text(draft.Status, draft.Running ? Theme.Good : Theme.Warn);
+                return;
+            }
+
+            if (advice.Picks.Count == 0)
+            {
+                Widgets.Text(advice.Status, Theme.Warn);
+                return;
+            }
+
+            var best = advice.Ranked[0];
+            if (draft.ConfirmDiff is { } diff)
+            {
+                if (diff.Count == 0)
+                    Widgets.Text("Deck to confirm = the advised deck.", Theme.Good);
+                foreach (var (picked, advised) in diff)
+                    Widgets.Text($"Deck to confirm has {picked.Name} ({picked.Stars}*), but the advice was {advised.Name}.", Theme.Warn);
+            }
+
+            Widgets.DisplayText($"Best deck {best.Expected:+0.00;-0.00;0.00} per game", Theme.HeadlineScale, Theme.Good);
+            Widgets.Muted($"{best.Win:P0} wins, {best.Loss:P0} losses in simulation. Take the green option of each pick; the others show the best deck with that option, against the best deck.");
+            if (ImGui.BeginTable("draft", 4, ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.BordersInnerV))
+            {
+                ImGui.TableSetupColumn("Pick", ImGuiTableColumnFlags.WidthFixed, Theme.Px(34f));
+                ImGui.TableSetupColumn("Option 1");
+                ImGui.TableSetupColumn("Option 2");
+                ImGui.TableSetupColumn("Option 3");
+                ImGui.TableHeadersRow();
+                for (var pick = 0; pick < 3; pick++)
+                {
+                    ImGui.TableNextRow();
+                    Cell($"{pick + 1}", Theme.Gold);
+                    foreach (var option in advice.Options.Where(o => o.Pick == pick).OrderBy(o => o.Choice))
+                    {
+                        var chosen = advice.Best[pick].Choice == option.Choice;
+                        var cards = string.Join(" + ", option.Cards.Select(c => $"{c.Name} {c.Stars}*"));
+                        ImGui.TableNextColumn();
+                        if (chosen)
+                            ImGui.TableSetBgColor(ImGuiTableBgTarget.CellBg, Theme.Color(Theme.GoodFill));
+                        Widgets.Text(chosen ? $"> {cards}" : $"{cards}  {option.Value - best.Expected:+0.00;-0.00;0.00}", chosen ? Theme.Good : Theme.Muted);
+                    }
+                }
+
+                ImGui.EndTable();
+            }
+
+            Widgets.Muted(advice.Status);
+        }
+    }
+
+    // Farming: talk, challenge, deck, auto play, rematch until the goal, quit.
+    private void DrawSession()
+    {
+        var session = this.plugin.Session;
+        var config = this.plugin.Configuration;
+        Widgets.Section("Farm the targeted NPC");
+        if (!session.Active)
+        {
+            var max = config.SessionMaxMatches;
+            ImGui.SetNextItemWidth(Theme.Px(110f));
+            if (ImGui.InputInt("Matches (0 = until stopped)", ref max))
+            {
+                config.SessionMaxMatches = max;
+                config.Save();
+            }
+
+            if (Widgets.Button("Start farming", true))
+                this.sessionError = this.plugin.StartSession();
+            ImGui.SameLine();
+            Widgets.Muted("Target the NPC and stand next to it.");
+            if (this.sessionError is { } error)
+                Widgets.Text(error, Theme.Warn);
+        }
+        else
+        {
+            var goal = session.MaxMatches == 0 ? "until stopped" : $"{session.MatchesDone}/{session.MaxMatches}";
+            ImGui.TextUnformatted($"Farming {session.NpcName}: {goal}");
+            Widgets.Chips([($"{session.Wins} won", Theme.Good), ($"{session.Draws} drawn", Theme.Gold), ($"{session.Losses} lost", Theme.Red)]);
+            if (!session.StopRequested && ImGui.Button("Stop after this match"))
+                session.StopRequested = true;
+            if (!session.StopRequested)
+                ImGui.SameLine();
+            if (Widgets.DangerButton("Stop now"))
+                session.Stop("stopped by the player");
+        }
+
+        Widgets.Text(session.Status, session.Active ? Theme.Good : Theme.Muted);
+        if (config.SessionPicksDeck && this.plugin.DeckChooser.Summary.Length > 0)
+            Widgets.Muted(this.plugin.DeckChooser.Summary);
+        if (config.SessionBuildsDeck && this.plugin.DeckPrep.Summary.Length > 0)
+            Widgets.Muted($"Deck building: {this.plugin.DeckPrep.Summary}");
+        if (session.LastAction.Length > 0)
+            Widgets.Muted($"Last: {session.LastAction}");
+    }
+
+    // Best decks from the collection against the NPC we face, and how the saved decks compare.
+    private void DrawDeckBuilder()
+    {
+        var decks = this.plugin.Decks;
+        Widgets.Section("Deck builder");
+        if (decks.Running)
+        {
+            Widgets.Text($"Searching against {decks.Npc?.Name}: {decks.Progress}", Theme.Good);
+            if (ImGui.SmallButton("Cancel"))
+                decks.Cancel();
+        }
+        else
+        {
+            if (Widgets.Button("Find the best deck", true))
+                this.deckError = this.plugin.StartDeckSearch();
+            ImGui.SameLine();
+            Widgets.Muted("against the targeted NPC (or the last one played)");
+            if ((this.deckError ?? decks.Error) is { } error)
+                Widgets.Text(error, Theme.Warn);
+        }
+
+        if (decks.Npc is not { } npc)
+            return;
+        ImGui.TextUnformatted(npc.Name);
+        ImGui.SameLine();
+        Widgets.Muted($"({decks.RulesSource})");
+        Widgets.Chips(decks.Rules.Rules.Select(r => (this.RuleName(r), Theme.Gold)));
+        if (decks.Result is not { } result)
+            return;
+        Widgets.Muted($"{result.Status}. Expected = wins minus losses per game against the NPC model (+1 = always win).");
+        if (ImGui.BeginTable("decks", 4, ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingStretchProp))
+        {
+            ImGui.TableSetupColumn("Deck", ImGuiTableColumnFlags.WidthFixed, Theme.Px(80f));
+            ImGui.TableSetupColumn("Expected", ImGuiTableColumnFlags.WidthFixed, Theme.Px(60f));
+            ImGui.TableSetupColumn("W / D / L", ImGuiTableColumnFlags.WidthFixed, Theme.Px(100f));
+            ImGui.TableSetupColumn("Cards (in play order)");
+            ImGui.TableHeadersRow();
+            for (var i = 0; i < result.Saved.Count && i < decks.Saved.Count; i++)
+                DeckRow(decks.Saved[i].Name, result.Saved[i], Theme.Muted);
+            for (var i = 0; i < result.Best.Count; i++)
+            {
+                var score = result.Best[i];
+                var same = decks.Saved.FirstOrDefault(d => SameCards(d.Cards, score.Cards));
+                DeckRow(same is null ? $"#{i + 1}" : $"#{i + 1} = {same.Name}", score, i == 0 ? Theme.Good : Theme.Text);
+            }
+
+            ImGui.EndTable();
+        }
+
+        this.DrawDeckWrite(result.Best.Count > 0 ? result.Best[0].Cards : null);
+    }
+
+    // Writes the best deck into the slot the settings allow (Gold Saucer deck editor).
+    private void DrawDeckWrite(IReadOnlyList<CardInfo>? best)
+    {
+        var writer = this.plugin.DeckWriter;
+        var slot = this.plugin.Configuration.DeckWriteSlot;
+        if (writer.Active)
+        {
+            Widgets.Text($"Writing: {writer.Status}", Theme.Good);
+            if (ImGui.SmallButton("Stop writing"))
+                writer.Stop("stopped by the player");
+            return;
+        }
+
+        if (best is not null && slot >= 0)
+        {
+            var current = this.plugin.Decks.Saved.FirstOrDefault(d => d.Index == slot);
+            if (Widgets.Button($"Write #1 to Deck {slot + 1}", true))
+                this.writeError = this.plugin.StartDeckWrite(best);
+            ImGui.SameLine();
+            Widgets.Muted(current is null ? "(empty slot)" : $"(replaces {current.Name}: {string.Join(", ", current.Cards.Select(c => c.Name))})");
+        }
+        else if (best is not null)
+        {
+            Widgets.Muted("Build #1 in a free deck slot, or allow a slot in Settings to have it written.");
+        }
+
+        if ((this.writeError ?? (writer.Status.Length > 0 ? writer.Status : null)) is { } status)
+            Widgets.Text(status, status.StartsWith("done", StringComparison.Ordinal) ? Theme.Good : Theme.Warn);
+    }
+
+    private static void DeckRow(string label, Core.Deck.DeckScore score, Vector4 color)
+    {
+        ImGui.TableNextRow();
+        Cell(label, color);
+        Cell($"{score.Expected:+0.00;-0.00;0.00}", color);
+        Cell($"{score.Win:P0} / {score.Draw:P0} / {score.Loss:P0}", color);
+        if (score.PerfectWin is { } pw)
+            Widgets.HoverTooltip($"With both hands known, perfect play: {pw:P0} win / {score.PerfectDraw:P0} draw / {score.PerfectLoss:P0} loss over the NPC's hands");
+        ImGui.TableNextColumn();
+        Widgets.Text(string.Join(", ", score.Cards.Select(c => $"{c.Name} {c.Stars}*")), color);
+        Widgets.HoverTooltip(string.Join("\n", score.Cards.Select(c => $"{c.Name}  {c.Stars}*  [{c.Stats}]")));
+    }
+
+    private static bool SameCards(IReadOnlyList<CardInfo> a, IReadOnlyList<CardInfo> b)
+        => a.Select(c => c.Id).Order().SequenceEqual(b.Select(c => c.Id).Order());
+
+    // Queue for Open Tournaments with the targeted Official and play them through.
+    private void DrawTournamentQueue()
+    {
+        var runner = this.plugin.Tournament;
+        var config = this.plugin.Configuration;
+        Widgets.Section("Open Tournament queue");
+        if (!runner.Active)
+        {
+            var count = config.TournamentCount;
+            ImGui.SetNextItemWidth(Theme.Px(110f));
+            if (ImGui.InputInt("Tournaments (0 = until stopped)", ref count))
+            {
+                config.TournamentCount = Math.Max(0, count);
+                config.Save();
+            }
+
+            if (Widgets.Button("Queue", true))
+                this.tournamentError = this.plugin.StartTournament();
+            ImGui.SameLine();
+            Widgets.Muted("Target the Open Tournament Official and stand next to it.");
+            if (this.tournamentError is { } error)
+                Widgets.Text(error, Theme.Warn);
+        }
+        else
+        {
+            var goal = runner.MaxTournaments == 0 ? "until stopped" : $"{runner.TournamentsDone}/{runner.MaxTournaments}";
+            ImGui.TextUnformatted($"Open Tournament {goal}: {runner.Phase}");
+            if (Widgets.DangerButton("Stop queueing"))
+                runner.Stop("stopped by the player");
+        }
+
+        Widgets.Text(runner.Status, runner.Active ? Theme.Good : Theme.Muted);
+        if (runner.LastAction.Length > 0)
+            Widgets.Muted($"Last: {runner.LastAction}");
+    }
+
+    // The next Open Tournaments (Gold Saucer), computed from the sheet rotation, in local time.
+    private void DrawTournaments()
+    {
+        var rows = this.plugin.Data!.TournamentRules;
+        if (rows.Count == 0)
+            return;
+        Widgets.Section("Schedule");
+        if (!ImGui.BeginTable("schedule", 2, ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingStretchProp))
+            return;
+        ImGui.TableSetupColumn("When", ImGuiTableColumnFlags.WidthFixed, Theme.Px(80f));
+        ImGui.TableSetupColumn("Rules");
+        foreach (var t in OpenTournament.Upcoming(rows, DateTimeOffset.UtcNow, 10))
+        {
+            var advanced = t.Rules.Rules.Count() > 1;
+            ImGui.TableNextRow();
+            Cell($"{t.StartUtc.ToLocalTime():ddd HH:mm}", Theme.Gold);
+            Cell(string.Join(", ", t.Rules.Rules.Select(this.RuleName)), advanced ? Theme.Good : Theme.Muted);
         }
 
         ImGui.EndTable();
@@ -468,13 +674,29 @@ public sealed class MainWindow : Window
     private void DrawNotes()
     {
         var notes = this.plugin.Tracker.Notes;
-        if (notes.Count == 0 || !ImGui.CollapsingHeader("Match log"))
+        if (notes.Count == 0)
+        {
+            Widgets.Muted("Nothing yet: the tracker notes every turn and event of the match here.");
             return;
+        }
+
         for (var i = notes.Count - 1; i >= Math.Max(0, notes.Count - 30); i--)
-            ImGui.TextColored(MutedColor, notes[i]);
+            Widgets.Muted(notes[i]);
     }
 
-    private static string Glyph(byte value) => value >= 10 ? "A" : value.ToString();
+    private string RuleName(TriadRule rule) => this.plugin.Data!.RuleNames.GetValueOrDefault(rule, rule.ToString());
+
+    private static bool Hovering(Vector2 min, Vector2 max) => ImGui.IsWindowHovered() && ImGui.IsMouseHoveringRect(min, max);
+
+    private static void Cell(string text, Vector4 color)
+    {
+        ImGui.TableNextColumn();
+        ImGui.TextColored(color, text);
+    }
+
+    private static string Describe(CardStats card)
+        => $"up {Widgets.Glyph(card.Up)}, right {Widgets.Glyph(card.Right)}, down {Widgets.Glyph(card.Down)}, left {Widgets.Glyph(card.Left)}"
+           + (card.Type == CardType.None ? string.Empty : $", {card.Type}");
 
     private static string Outcome(double value) => value switch
     {
@@ -482,5 +704,12 @@ public sealed class MainWindow : Window
         <= -0.999 => "loss",
         > -0.001 and < 0.001 => "draw",
         _ => $"{value:+0.00;-0.00}",
+    };
+
+    private static Vector4 OutcomeColor(double value) => value switch
+    {
+        > 0.001 => Theme.Good,
+        < -0.001 => Theme.Red,
+        _ => Theme.Gold,
     };
 }

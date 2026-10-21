@@ -1,5 +1,6 @@
 using Dalamud.Configuration;
 using Dalamud.Plugin;
+using TrialHater.Windows;
 
 namespace TrialHater;
 
@@ -9,7 +10,13 @@ public sealed class Configuration : IPluginConfiguration
 
     public int Version { get; set; } = 1;
 
-    public bool ShowOverlay { get; set; } = true;
+    // Opens the main window when the plugin loads (game start, reload).
+    public bool OpenAtStartup { get; set; } = true;
+
+    // Window backdrop behind the gold frame: dark red or dark blue, and how opaque.
+    public Backdrop Backdrop { get; set; } = Backdrop.Crimson;
+
+    public float BackdropOpacity { get; set; } = 0.88f;
 
     // Places the recommended card on our turn. Off by default and off again after every reload
     // unless the user turns it on; persisted only so a hot reload mid-match keeps going.
@@ -77,6 +84,9 @@ public sealed class Configuration : IPluginConfiguration
 
     private void Clamp()
     {
+        this.BackdropOpacity = Math.Clamp(this.BackdropOpacity, 0.3f, 1f);
+        if (!Enum.IsDefined(this.Backdrop))
+            this.Backdrop = Backdrop.Crimson;
         this.ModelEpsilon = Math.Clamp(this.ModelEpsilon, 0f, 1f);
         this.DeckWriteSlot = Math.Clamp(this.DeckWriteSlot, -1, 4);
         this.ExploitMinPlaced = Math.Clamp(this.ExploitMinPlaced, 0, 9);
