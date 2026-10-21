@@ -5,6 +5,8 @@ Notable changes are recorded here using the Keep a Changelog format and semantic
 
 ## Unreleased
 
+## [0.2.0] - 2026-10-21
+
 ### Added
 
 - The windows are drawn as a Triple Triad card: the game's gold card frame around a translucent
