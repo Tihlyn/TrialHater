@@ -5,6 +5,19 @@ Notable changes are recorded here using the Keep a Changelog format and semantic
 
 ## Unreleased
 
+### Changed
+
+- A finished farming session keeps its won/drawn/lost count on screen (status bar and Farming tab)
+  until the next session or match starts.
+
+### Fixed
+
+- Auto play no longer counts a move as a sure win when it only wins if the NPC's hidden cards
+  are known. When some moves win whatever the hidden cards are, it plays one of those (a Prideful
+  Stag match was lost this way; on recorded matches about 1 hidden-card move in 15 changes).
+- Deck writing no longer stalls when the Gold Saucer window opens on another tab: it switches to
+  Card Decks itself.
+
 ## [0.2.0] - 2026-10-21
 
 ### Added

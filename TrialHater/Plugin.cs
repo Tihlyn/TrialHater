@@ -211,6 +211,8 @@ public sealed unsafe class Plugin : IDalamudPlugin
         if (!this.Tracker.InMatch)
             this.IdentifyNpc(data);
         this.Tracker.Update(frame, resultVisible, data, () => this.SavedDecks(data.Cards));
+        if (this.Tracker.InMatch && !this.Session.Active)
+            this.Session.ClearRecap();
         this.CheckOpponent(data, frame);
 
         if (this.Tracker.View is { ToMove: Core.Engine.Side.Blue } view)

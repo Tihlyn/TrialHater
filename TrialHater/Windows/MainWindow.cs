@@ -138,6 +138,10 @@ public sealed class MainWindow : Window
             if (ImGui.SmallButton("Stop##session"))
                 session.Stop("stopped by the player");
         }
+        else if (session.HasRecap)
+        {
+            this.Activity("FARMED", $"{session.NpcName}  {session.MatchesDone} played  ·  {session.Wins}W {session.Draws}D {session.Losses}L", Theme.Gold);
+        }
 
         var tournament = plugin.Tournament;
         if (tournament.Active)
@@ -171,9 +175,9 @@ public sealed class MainWindow : Window
         Widgets.Ornament();
     }
 
-    private void Activity(string label, string text, bool working = false)
+    private void Activity(string label, string text, Vector4? color = null, bool working = false)
     {
-        Widgets.Chip(label, Theme.Good);
+        Widgets.Chip(label, color ?? Theme.Good);
         ImGui.SameLine(0f, Theme.Px(Theme.Gap));
         if (working)
         {
@@ -563,6 +567,11 @@ public sealed class MainWindow : Window
             Widgets.Muted("Target the NPC and stand next to it.");
             if (this.sessionError is { } error)
                 Widgets.Text(error, Theme.Warn);
+            if (session.HasRecap)
+            {
+                ImGui.TextUnformatted($"Last session against {session.NpcName}: {session.MatchesDone} played");
+                Widgets.Chips([($"{session.Wins} won", Theme.Good), ($"{session.Draws} drawn", Theme.Gold), ($"{session.Losses} lost", Theme.Red)]);
+            }
         }
         else
         {

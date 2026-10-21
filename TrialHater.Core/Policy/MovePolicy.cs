@@ -32,6 +32,12 @@ public sealed record PolicyOptions
     public int TableBits { get; init; } = 18;
 
     public int MaxParallelism { get; init; } = Math.Max(1, Environment.ProcessorCount - 2);
+
+    // The sure-win check (SureWin): time allowed and worker threads. On timeout the safe set is
+    // left as the exact half found it. Zero turns the check off.
+    public TimeSpan SureWinBudget { get; init; } = TimeSpan.FromSeconds(5);
+
+    public int SureWinParallelism { get; init; } = 4;
 }
 
 public sealed record MoveAssessment(Move Move, double ExpectedValue, double WorstValue, bool Safe, double? Exploit, int Captures);
@@ -135,6 +141,33 @@ public static class MovePolicy
         var bestExpected = expected.Values.Max();
         var safe = legal.Where(m => expected[m] >= bestExpected - Tolerance).ToList();
 
+        // A win in every hypothesis is not a win without knowing which hand the NPC holds: when
+        // some of these moves win against every hand (SureWin), keep only those.
+        var sureNote = string.Empty;
+        var perHandWins = legal.Where(m => worst[m] >= 1 - Tolerance).ToList();
+        if (perHandWins.Count > 1 && options.SureWinBudget > TimeSpan.Zero && SureWin.Applies(positions))
+        {
+            using var sureBudget = CancellationTokenSource.CreateLinkedTokenSource(cancel);
+            sureBudget.CancelAfter(options.SureWinBudget);
+            try
+            {
+                var sure = SureWin.Moves(positions, perHandWins, Math.Min(options.SureWinParallelism, options.MaxParallelism), sureBudget.Token);
+                if (sure.Count > 0 && sure.Count < safe.Count)
+                    safe = safe.Where(sure.Contains).ToList();
+                sureNote = sure.Count == 0
+                    ? "no move wins against every hand unseen; "
+                    : $"sure win: {sure.Count} of {perHandWins.Count} per-hand wins hold against every hand; ";
+            }
+            catch (OperationCanceledException) when (!cancel.IsCancellationRequested)
+            {
+                sureNote = $"sure-win check ran out ({options.SureWinBudget.TotalSeconds:0.#}s); ";
+            }
+            catch (OperationCanceledException)
+            {
+                return new Decision(DecisionStatus.Cancelled, null, [], hypotheses.Count, belief.Status, nodes, clock.Elapsed, "cancelled", fingerprint);
+            }
+        }
+
         // Exploitation half, inside the safe set only.
         Dictionary<Move, double>? exploit = null;
         string reason;
@@ -164,6 +197,7 @@ public static class MovePolicy
         if (cancel.IsCancellationRequested)
             return new Decision(DecisionStatus.Cancelled, null, [], hypotheses.Count, belief.Status, nodes, clock.Elapsed, "cancelled", fingerprint);
 
+        reason = sureNote + reason;
         var chosen = safe
             .OrderByDescending(m => exploit?.GetValueOrDefault(m, double.NegativeInfinity) ?? 0)
             .ThenByDescending(m => worst[m])

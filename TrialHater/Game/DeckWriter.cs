@@ -21,6 +21,12 @@ public sealed unsafe class DeckWriter
     private const int DeckRowStride = 7;
     private const int CardIconBase = 88000;
 
+    // GoldSaucerInfo: [0] = the selected tab; "Card Decks" is tab 3, the radio button node 6
+    // (ButtonClick param 4). The game then sends [0, 3, child addon id] itself (2026-10-21).
+    private const int InfoTab = 0;
+    private const int DeckTab = 3;
+    private const uint DeckTabButton = 6;
+
     private const string RemoveEntry = "Remove from Deck";
 
     // The game sends the editor's callbacks as 5 values; shorter ones lose their argument.
@@ -156,8 +162,14 @@ public sealed unsafe class DeckWriter
 
         if (info != null)
         {
+            if (AddonOps.IntValue(info, InfoTab) != DeckTab)
+            {
+                this.Act(now, "deck tab", "switching to the Card Decks tab", () => AddonOps.ActivateButton(info, DeckTabButton));
+                return;
+            }
+
             this.Wait(now, "the Triple Triad deck tab",
-                "the Gold Saucer window is open but not on the Triple Triad deck tab: switch to it and press again");
+                "the Gold Saucer window is on the Card Decks tab but the deck list did not show: press again");
             return;
         }
 

@@ -78,6 +78,9 @@ public sealed unsafe class SessionRunner
 
     public int Losses { get; private set; }
 
+    // A finished session's counters stay on screen as a recap until the next session or match.
+    public bool HasRecap { get; private set; }
+
     public string Status { get; private set; } = "off";
 
     // The "Triple Triad Challenge" text in the client language (GameData), for menus without icons.
@@ -103,6 +106,7 @@ public sealed unsafe class SessionRunner
         this.NpcName = npcName;
         this.MaxMatches = maxMatches;
         this.StopRequested = false;
+        this.HasRecap = false;
         this.MatchesDone = this.Wins = this.Draws = this.Losses = 0;
         this.currentKey = string.Empty;
         this.Status = "starting";
@@ -114,9 +118,12 @@ public sealed unsafe class SessionRunner
         if (!this.Active)
             return;
         this.Active = false;
+        this.HasRecap = this.MatchesDone > 0;
         this.Status = $"stopped: {why}";
         this.log($"[Session] {this.Status}; {this.MatchesDone} played: {this.Wins}W {this.Draws}D {this.Losses}L");
     }
+
+    public void ClearRecap() => this.HasRecap = false;
 
     public void MatchEnded(int blueCards)
     {
