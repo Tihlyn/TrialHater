@@ -7,8 +7,13 @@ Private Dalamud plugin (API 15, .NET 10) automating Triple Triad against NPCs. R
 - `dotnet test TrialHater.Tests` (Core only, no game needed; reads `research/data/*.csv`).
 - Engine changes: also run `research/validation/EngineDiff` (`dotnet run -c Release -- ../../data/cards.csv 5000`). It must stay at 0 mismatches unless the change deliberately departs from the lineage; record the departure in `docs/RULES.md`.
 
+## Versions
+- `<Version>` in `Directory.Build.props`; notes under `## Unreleased` in `CHANGELOG.md` with every user-visible change.
+- Release: `tools/release.ps1 -Bump patch|minor|major` from a clean `main` (tags `vX.Y.Z`, CI publishes). Remote: github.com/Tihlyn/TrialHater. Workflows ported from MahjongHater.
+
 ## Layout
 - `TrialHater.Core` — no Dalamud references, ever. `Engine/` (make/unmake rules engine), `Search/` (exact solver, exploit evaluator, opponent models), `Belief/` (NPC hand hypotheses), `Policy/` (decision), `Match/` (MatchView: the plain observation).
+- `TrialHater/Windows` — `Theme` (palette, style scope), `Chrome` (card-shaped window: backdrop, gold frame, header, body, footer), `CardArt` (sprite atlas over `assets/Triple Triad Card Template.png`, embedded), `Widgets` (cards, medallions, chips, toggles, panels).
 - `TrialHater/Game` — `GameData` (Lumina sheets), `BoardReader` (addon → BoardFrame copy), `MatchTracker` (frames → MatchView, history), `AnalysisService` (worker), `BoardActuator` (callback 14), `AutoPlayer` (guards), `SessionRunner` + `AddonOps` (farming windows via native ButtonClick chains), `MatchJournal` (matches.csv, npc_moves.jsonl), `ModelProbe` (per-event dumps).
 - `TrialHater.Core/Session/SessionPlanner` — pure "which window is up → one action" logic for the session.
 - `TrialHater.Core/Session/IdleGuard` — anti-AFK Control press while auto play runs unattended (match, session, duty), ported from MahjongHater; native seams in `TrialHater/Game/IdleInput`.

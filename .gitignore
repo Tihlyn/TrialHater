@@ -9,3 +9,6 @@ research/.tools/
 
 # Claude Code agent worktrees
 .claude/worktrees/
+
+# Python bytecode from tools/
+__pycache__/

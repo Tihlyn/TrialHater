@@ -34,7 +34,27 @@ In game: `/xlsettings` → Experimental → add `TrialHater\bin\Debug\net10.0-wi
 | `/thater config` | settings |
 | `/thater auto [on\|off]` | toggle auto play (placing the recommended card on our turn) |
 
+The main window is drawn as a Triple Triad card (version next to the name). At the top, always in view: auto play, whatever is running with its stop button, and the opponent with the match's rules. Below: the draft advisor while drafting, the match (both hands, the board, scores, and the move to play glowing green with what it guarantees), then tabs for farming, the deck builder, Open Tournaments and the match log. Settings choose whether the window opens when the plugin loads and the backdrop (Crimson or Midnight, and its opacity).
+
 Target the NPC before challenging it. The target identifies the NPC's deck, and without that its hidden cards cannot be read.
+
+## Versions and releases
+
+The version lives in `Directory.Build.props` (`<Version>`); the window shows it next to the name and the changes go under `## Unreleased` in [CHANGELOG.md](CHANGELOG.md).
+
+| Workflow | Trigger | Does |
+|---|---|---|
+| CI | push to `main`, pull request, manual | builds the plugin in Release, runs the tests, uploads `latest.zip` |
+| Release | tag `v*` | checks the tag against `<Version>`, builds, tests, publishes a GitHub release with `latest.zip`, updates `repo.json` on `main` |
+| Testing release | tag `testing-a.b.c.d` | publishes a pre-release and the testing channel of `repo.json`, keeping the stable entry |
+
+Cut a release from a clean `main` that matches `origin/main`:
+
+```powershell
+./tools/release.ps1 -Bump minor        # or patch / major, or -Version 1.0.0; -DryRun to preview
+```
+
+It runs the tests, dates the Unreleased notes, bumps `<Version>`, commits, tags `vX.Y.Z` and pushes both; CI does the rest. A testing build: `git tag testing-1.1.0.1; git push origin testing-1.1.0.1` (four parts, newer than the stable version).
 
 ## Status
 
