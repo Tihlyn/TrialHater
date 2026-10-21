@@ -1,0 +1,32 @@
+[
+  {
+    "Author": "Tihlyn",
+    "Name": "TrialHater",
+    "InternalName": "TrialHater",
+    "AssemblyVersion": "0.2.0.0",
+    "Description": "Reads Triple Triad matches from the game, enumerates the NPC's possible hands, solves every one exactly and plays the move that keeps the best guaranteed result while exploiting how NPCs play. Private tool; not for the official repository.",
+    "ApplicableVersion": "any",
+    "RepoUrl": "https://github.com/Tihlyn/TrialHater",
+    "Tags": [
+      "triple triad",
+      "gold saucer",
+      "cards"
+    ],
+    "CategoryTags": [
+      "Utility"
+    ],
+    "DalamudApiLevel": 15,
+    "LoadRequiredState": 0,
+    "LoadSync": false,
+    "CanUnloadAsync": true,
+    "LoadPriority": 0,
+    "Punchline": "Triple Triad: exact solver, NPC hand reading and automated play.",
+    "AcceptsFeedback": true,
+    "DownloadLinkInstall": "https://github.com/Tihlyn/TrialHater/releases/download/v0.2.0/latest.zip",
+    "DownloadLinkUpdate": "https://github.com/Tihlyn/TrialHater/releases/download/v0.2.0/latest.zip",
+    "DownloadLinkTesting": "https://github.com/Tihlyn/TrialHater/releases/download/v0.2.0/latest.zip",
+    "IsHide": false,
+    "IsTestingExclusive": false,
+    "LastUpdate": 1792560988
+  }
+]
