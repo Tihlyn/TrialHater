@@ -14,8 +14,27 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
+# Windows PowerShell 5.1 turns a native command's stderr (git's progress lines, dotnet's warnings)
+# into error records that 'Stop' makes fatal. Only the exit code says whether the command failed:
+# stderr lines are shown, stdout lines are returned.
+function Invoke-Native {
+    param([string]$Command, [string[]]$Arguments)
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $output = & $Command @Arguments 2>&1
+    } finally {
+        $ErrorActionPreference = $previous
+    }
+    $code = $LASTEXITCODE
+    foreach ($line in $output) {
+        if ($line -is [System.Management.Automation.ErrorRecord]) { Write-Host $line.ToString() } else { $line }
+    }
+    $global:LASTEXITCODE = $code
+}
+
 function Invoke-Git {
-    & git @args
+    Invoke-Native git $args
     if ($LASTEXITCODE -ne 0) { throw "git $args failed (exit $LASTEXITCODE)." }
 }
 
@@ -67,7 +86,7 @@ try {
     }
 
     Write-Host 'Running tests before changing the version...'
-    & dotnet test TrialHater.Tests -c Release -nologo
+    Invoke-Native dotnet @('test', 'TrialHater.Tests', '-c', 'Release', '-nologo') | Out-Host
     if ($LASTEXITCODE -ne 0) { throw 'Tests failed; no version changes were made.' }
     if (Invoke-Git status --porcelain) { throw 'Tests changed the working tree; inspect the changes first.' }
 
