@@ -34,7 +34,9 @@ In game: `/xlsettings` → Experimental → add `TrialHater\bin\Debug\net10.0-wi
 | `/thater config` | settings |
 | `/thater auto [on\|off]` | toggle auto play (placing the recommended card on our turn) |
 
-The main window is drawn as a Triple Triad card (version next to the name). At the top, always in view: auto play, whatever is running with its stop button, and the opponent with the match's rules. Below: the draft advisor while drafting, the match (both hands, the board, scores, and the move to play glowing green with what it guarantees), then tabs for farming, the deck builder, Open Tournaments and the match log. Settings choose whether the window opens when the plugin loads and the backdrop (Crimson or Midnight, and its opacity).
+The main window is drawn as a Triple Triad card (version next to the name). At the top, always in view: auto play, whatever is running with its stop button, and the opponent with the match's rules. Below: the draft advisor while drafting, the match (both hands, the board, scores, and the move to play glowing green with what it guarantees), then tabs for farming, the deck builder, Open Tournaments and the match log. Settings choose whether the window opens when the plugin loads and the backdrop (Crimson or Midnight, and its opacity). A spinner shows whatever is still working (the solver with its time, deck searches, the draft ranking); a solver that failed says so.
+
+Deck searches are cached per character (`pluginConfigs/TrialHater/characters/<content id>/`): farming the same NPC again reuses the search until a newly obtained card would change it. The same folder records each Open Tournament we play (our deck and placing; top half = vetted), which breaks near-ties in the draft advice.
 
 Target the NPC before challenging it. The target identifies the NPC's deck, and without that its hidden cards cannot be read.
 

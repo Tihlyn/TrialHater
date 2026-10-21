@@ -10,7 +10,9 @@ namespace TrialHater.Game;
 // allow under the tournament's rules (DraftAdvisor, on a worker) for the main window to show. Also
 // records every player's drafted deck from the tournament results window (tournament_decks.csv),
 // which, with the decks shipped in the plugin (research/data/draft-decks.csv), is the advisor's
-// picture of the field. Framework thread, except the advice itself.
+// picture of the field. Our own row of those results is the character's draft record (picks vetted
+// or discarded by how we placed), which breaks the advice's near-ties. Framework thread, except
+// the advice itself.
 public sealed unsafe class DraftService : IDisposable
 {
     private const string DraftAddon = "TripleTriadPickUpDeckSelect";
@@ -38,13 +40,15 @@ public sealed unsafe class DraftService : IDisposable
     private const int OfferStride = 5;
     private const int OfferIconBase = 87000;
 
-    // TripleTriadTournamentResult: per player (rank, name, points, captures, 5 x 88000 + id, 2 flags)
-    // in stride 11 from [2].
+    // TripleTriadTournamentResult: per player (rank, name, points, captures, 5 x 88000 + id, 2 flags,
+    // the first true for the local player) in stride 11 from [2].
     private const int ResultBase = 2;
     private const int ResultStride = 11;
     private const int ResultIconBase = 88000;
+    private const int ResultLocalFlag = 9;
 
     private readonly Dalamud.Plugin.Services.IGameGui gameGui;
+    private readonly CharacterData character;
     private readonly string recordPath;
     private readonly Action<string> log;
     private readonly HashSet<string> recorded = new();
@@ -53,6 +57,7 @@ public sealed unsafe class DraftService : IDisposable
     private List<CardStats[]>? observed;
     private bool recordedLoaded;
     private DateTimeOffset? reportSeen;
+    private DateTimeOffset ownChecked;
     private bool reportPressed;
 
     // Auto draft: picks pressed so far (0-3), then 4 = done pressed, 5 = confirmed, -1 = stopped.
@@ -60,9 +65,10 @@ public sealed unsafe class DraftService : IDisposable
     private DateTimeOffset draftShownAt;
     private DateTimeOffset nextDraftAction;
 
-    public DraftService(Dalamud.Plugin.Services.IGameGui gameGui, string configFolder, Action<string> log)
+    public DraftService(Dalamud.Plugin.Services.IGameGui gameGui, string configFolder, CharacterData character, Action<string> log)
     {
         this.gameGui = gameGui;
+        this.character = character;
         this.recordPath = Path.Combine(configFolder, "tournament_decks.csv");
         this.log = log;
     }
@@ -90,7 +96,7 @@ public sealed unsafe class DraftService : IDisposable
     // `autoDraft`: take the advised options and confirm (auto play on and the setting on).
     public void Tick(GameData data, DateTimeOffset now, bool autoPlay, bool autoDraft)
     {
-        this.RecordResults(now);
+        this.RecordResults(data, now);
         if (autoPlay)
             this.ConfirmReport(now);
         var draft = this.Ready(DraftAddon);
@@ -258,12 +264,13 @@ public sealed unsafe class DraftService : IDisposable
         this.Running = true;
         this.Status = "ranking the 243 decks";
         var observedDecks = this.Observed(cards);
+        var record = this.character.Drafts;
         var token = source.Token;
         Task.Run(() =>
         {
             try
             {
-                var advice = DraftAdvisor.Advise(offer, rules, observedDecks, cards, token);
+                var advice = DraftAdvisor.Advise(offer, rules, observedDecks, cards, token, record: record);
                 if (token.IsCancellationRequested)
                     return;
                 this.Advice = advice;
@@ -317,7 +324,7 @@ public sealed unsafe class DraftService : IDisposable
     }
 
     // Every player's deck from the results window, once per tournament and player.
-    private void RecordResults(DateTimeOffset now)
+    private void RecordResults(GameData data, DateTimeOffset now)
     {
         var result = this.Ready(ResultAddon);
         if (result == null || result->AtkValuesCount < ResultBase + (ResultStride * 8))
@@ -335,6 +342,10 @@ public sealed unsafe class DraftService : IDisposable
             var key = $"{name.Replace(',', ' ')}|{string.Join(",", ids)}";
             if (this.recorded.Add(key))
                 lines.Add(DraftDecks.Line(tournament, name, ids.Select(id => (ushort)id)));
+            var mine = AddonOps.BoolValue(result, row + ResultLocalFlag)
+                       || (this.character.Name.Length > 0 && name.Equals(this.character.Name, StringComparison.OrdinalIgnoreCase));
+            if (mine)
+                this.RecordOwn(result, row, data, tournament, ids.Select(id => (ushort)id).ToList());
         }
 
         if (lines.Count == 0)
@@ -349,6 +360,34 @@ public sealed unsafe class DraftService : IDisposable
         catch (Exception ex)
         {
             this.log($"[Draft] could not write {this.recordPath}: {ex.Message}");
+        }
+    }
+
+    // Our placing with the deck we drafted, against the advice of this tournament's draft (when the
+    // plugin saw it).
+    private void RecordOwn(AtkUnitBase* result, int row, GameData data, DateTimeOffset tournament, List<ushort> deck)
+    {
+        if (this.ownChecked == tournament)
+            return;
+        this.ownChecked = tournament;
+        if (AddonOps.NumberValue(result, row) is not { } rank || AddonOps.NumberValue(result, row + 2) is not { } points)
+        {
+            this.log("[Draft] our results row has no readable rank or points; not recorded");
+            return;
+        }
+
+        var captures = AddonOps.NumberValue(result, row + 3) ?? 0;
+        var sorted = deck.Order().ToList();
+        var advice = this.Advice;
+        var score = advice?.Ranked.FirstOrDefault(s => s.Cards.Select(c => c.Id).Order().SequenceEqual(sorted));
+        var advised = advice is { Picks.Count: 5 } && advice.Picks.Select(c => c.Id).Order().SequenceEqual(sorted);
+        // The advice's rules, or after a reload the rules of the slot the tournament started in.
+        var rules = this.Offer.Count > 0 ? this.Rules : CurrentRules(data, tournament);
+        var entry = new DraftResult(tournament, rules, deck, score?.Expected, advised, rank, points, captures);
+        if (this.character.AddDraft(entry))
+        {
+            this.log($"[Draft] tournament result: rank {rank}, {points} points, {captures:+0;-0} captures with "
+                     + $"{(advised ? "the advised deck" : "a deck other than the advice")}: {(entry.Vetted ? "vetted" : "discarded")}");
         }
     }
 

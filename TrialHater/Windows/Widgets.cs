@@ -51,6 +51,34 @@ internal static class Widgets
 
     public static void Muted(string text) => Text(text, Theme.Muted);
 
+    // A ring of dots turning once a second, one text line high: the work is still going (a frozen
+    // ring or none means it is not).
+    public static void Spinner(Vector4 color)
+    {
+        const int dots = 8;
+        var size = ImGui.GetTextLineHeight();
+        var pos = ImGui.GetCursorScreenPos();
+        ImGui.Dummy(new Vector2(size, size));
+        var draw = ImGui.GetWindowDrawList();
+        var center = pos + new Vector2(size / 2f);
+        var head = (int)(ImGui.GetTime() * dots) % dots;
+        for (var i = 0; i < dots; i++)
+        {
+            var angle = i * MathF.Tau / dots;
+            var fade = 1f - (((head - i + dots) % dots) / (float)dots);
+            var at = center + (new Vector2(MathF.Cos(angle), MathF.Sin(angle)) * size * 0.38f);
+            draw.AddCircleFilled(at, size * 0.09f, Theme.Color(color with { W = color.W * fade }));
+        }
+    }
+
+    // Spinner, then the text on the same line.
+    public static void Busy(string text, Vector4 color)
+    {
+        Spinner(color);
+        ImGui.SameLine(0f, Theme.Px(Theme.SmallGap));
+        Text(text, color);
+    }
+
     // Gold section title with a fading rule to the right.
     public static void Section(string title)
     {

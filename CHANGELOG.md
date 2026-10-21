@@ -19,6 +19,19 @@ Notable changes are recorded here using the Keep a Changelog format and semantic
 - Always in view at the top: auto play, whatever is running (farming, tournament queue, deck
   writing, deck search) with its stop button, and the opponent with the match's rules.
 - Farming, deck builder, Open Tournament (queue and schedule) and the match log are tabs.
+- Deck cache, per character: a deck search against an NPC (session deck building, the deck
+  builder) is reused until a newly obtained card would be among the cards it tries, and each deck's
+  score (saved decks included) is kept per NPC and rules. A search under exact rules takes 10-15 s;
+  a reused one skips it. Kept in `characters/<content id>/deck_cache.json`, so another character on
+  the account with other cards never reuses it; dropped on a game patch that changes cards or NPC
+  decks. Settings show what it holds and can clear it.
+- Open Tournament record, per character: our drafted deck, its expected result in the advice and
+  where we placed, from the results window. Top half of the 8 = vetted, otherwise discarded. The
+  Tournament tab lists it, the draft advisor shows each option's record, and among decks the
+  simulation cannot tell apart (within 0.03) the advice takes the one whose cards did better.
+- A spinner next to everything still running (solving, deck search, session deck building, draft
+  ranking), with the time spent solving; it turns orange past the exploit budget. A solver
+  exception is shown in place of "No decision yet."
 - Releases: CI builds and tests every push to main; a `v*` tag publishes a GitHub release and
   updates `repo.json`; a `testing-*` tag publishes a testing build (`tools/release.ps1`).
 

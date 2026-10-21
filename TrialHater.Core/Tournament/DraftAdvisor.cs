@@ -28,10 +28,18 @@ public sealed record DraftAdvice(
 // drafted decks seen in past tournaments, topped up with random one-per-rarity decks.
 // Opponents' drafts are unknown in advance (each player gets its own offer), so this ranks decks
 // against the field, not against a particular player.
+//
+// With a DraftRecord, decks within TieMargin of the best - closer than the simulation can tell
+// apart - are decided by how their cards did in our past tournaments under the same rules (vetted
+// minus discarded); the chosen deck is ranked first.
 public static class DraftAdvisor
 {
     public const int Opponents = 96;
     public const int OfferSize = 15;
+
+    // About two standard errors of a deck's simulated expected result (96 opponents x 2 sides x 8
+    // games): decks closer than this are a tie.
+    public const double TieMargin = 0.03;
 
     // Window positions of each pick's options.
     public static readonly int[][][] Layout =
@@ -43,7 +51,7 @@ public static class DraftAdvisor
 
     // `offer`: the 15 cards in window order.
     public static DraftAdvice Advise(IReadOnlyList<CardInfo> offer, RuleSet rules, IReadOnlyList<CardStats[]> observed, CardCatalog catalog,
-        CancellationToken cancel = default, int seed = 1)
+        CancellationToken cancel = default, int seed = 1, DraftRecord? record = null)
     {
         if (offer.Count != OfferSize)
             return Empty($"the offer has {offer.Count} cards, not {OfferSize}");
@@ -66,9 +74,23 @@ public static class DraftAdvisor
         var order = Enumerable.Range(0, decks.Count).OrderByDescending(i => scores[i].Expected).ToList();
         var all = options.SelectMany(pick => pick.Select(o => new DraftOption(o.Pick, o.Choice, o.Cards,
             Enumerable.Range(0, decks.Count).Where(i => decks[i].Choices[o.Pick] == o.Choice).Max(i => scores[i].Expected)))).ToList();
-        var bestDeck = order[0];
-        var best = Enumerable.Range(0, 3).Select(p => all.First(o => o.Pick == p && o.Choice == decks[bestDeck].Choices[p])).ToList();
         var status = $"{decks.Count} decks vs {opponents.Count} opponents ({Math.Min(observed.Count, Opponents)} seen in past tournaments) under [{rules}]";
+        var bestDeck = order[0];
+        if (record is not null)
+        {
+            var track = (int i) => record.Track(rules, decks[i].Cards.Select(c => c.Id));
+            var chosen = order.TakeWhile(i => scores[i].Expected >= scores[order[0]].Expected - TieMargin)
+                .OrderByDescending(track).ThenByDescending(i => scores[i].Expected).First();
+            if (chosen != bestDeck)
+            {
+                status += $"; past tournaments: took a deck {scores[order[0]].Expected - scores[chosen].Expected:0.00} below the best (a tie) for its cards' record ({track(chosen):+0;-0} vs {track(bestDeck):+0;-0})";
+                order.Remove(chosen);
+                order.Insert(0, chosen);
+                bestDeck = chosen;
+            }
+        }
+
+        var best = Enumerable.Range(0, 3).Select(p => all.First(o => o.Pick == p && o.Choice == decks[bestDeck].Choices[p])).ToList();
         return new DraftAdvice(decks[bestDeck].Cards, best, all, order.Select(i => scores[i]).ToList(), status);
     }
 

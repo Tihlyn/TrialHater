@@ -28,6 +28,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
     private readonly ITargetManager targets;
     private readonly IObjectTable objects;
     private readonly ICondition condition;
+    private readonly IPlayerState playerState;
     private readonly ModelProbe probe;
     private readonly MatchJournal journal;
     private long frameCounter;
@@ -45,7 +46,8 @@ public sealed unsafe class Plugin : IDalamudPlugin
         ITargetManager targets,
         IObjectTable objects,
         ICondition condition,
-        ITextureProvider textureProvider)
+        ITextureProvider textureProvider,
+        IPlayerState playerState)
     {
         this.pluginInterface = pluginInterface;
         this.gameGui = gameGui;
@@ -54,6 +56,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
         this.targets = targets;
         this.objects = objects;
         this.condition = condition;
+        this.playerState = playerState;
         this.Log = log;
 
         this.Configuration = Configuration.Load(pluginInterface);
@@ -64,11 +67,12 @@ public sealed unsafe class Plugin : IDalamudPlugin
             IdleInput.SendControl, IdleInput.ControlHeld) { Enabled = this.Configuration.AntiIdle };
         this.probe = new ModelProbe(Path.Combine(pluginInterface.GetPluginConfigDirectory(), "model_probe.jsonl"));
         this.journal = new MatchJournal(pluginInterface.GetPluginConfigDirectory(), (ex, msg) => log.Warning(ex, msg));
+        this.Character = new CharacterData(pluginInterface.GetPluginConfigDirectory(), msg => log.Information(msg));
         this.Decks = new DeckService((ex, msg) => log.Error(ex, msg));
         this.DeckChooser = new SessionDeckChooser(msg => log.Information(msg));
         this.DeckWriter = new DeckWriter(gameGui, msg => log.Information(msg));
         this.DeckPrep = new SessionDeckPrep(msg => log.Information(msg));
-        this.Draft = new DraftService(gameGui, pluginInterface.GetPluginConfigDirectory(), msg => log.Information(msg));
+        this.Draft = new DraftService(gameGui, pluginInterface.GetPluginConfigDirectory(), this.Character, msg => log.Information(msg));
         this.Tournament = new TournamentRunner(gameGui, targets, objects, condition, msg => log.Information(msg));
         this.Tracker.Event += this.OnTrackerEvent;
         this.Tracker.RedMoved += this.journal.RedMoved;
@@ -94,7 +98,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
         CardArt.Initialize(textureProvider);
         this.WindowSystem = new WindowSystem("TrialHater");
         this.MainWindow = new MainWindow(this);
-        this.ConfigWindow = new ConfigWindow(this.Configuration, this.IdleGuard);
+        this.ConfigWindow = new ConfigWindow(this.Configuration, this.IdleGuard, this.Character);
         this.WindowSystem.AddWindow(this.MainWindow);
         this.WindowSystem.AddWindow(this.ConfigWindow);
         this.MainWindow.IsOpen = this.Configuration.OpenAtStartup;
@@ -132,6 +136,9 @@ public sealed unsafe class Plugin : IDalamudPlugin
 
     public IdleGuard IdleGuard { get; }
 
+    // Per character: the deck cache and our tournament drafts.
+    public CharacterData Character { get; }
+
     public DeckService Decks { get; }
 
     public SessionDeckChooser DeckChooser { get; }
@@ -160,6 +167,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
         this.DeckChooser.Dispose();
         this.DeckPrep.Dispose();
         this.Draft.Dispose();
+        this.Character.Dispose();
         this.Tracker.Event -= this.OnTrackerEvent;
         this.Tracker.RedMoved -= this.journal.RedMoved;
         this.Tracker.MatchEnded -= this.OnMatchEnded;
@@ -196,6 +204,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
             return;
         }
 
+        this.Character.Update(this.playerState.IsLoaded ? this.playerState.ContentId : 0, this.playerState.CharacterName, data.Cards, DateTime.UtcNow);
         var board = this.Addon(BoardReader.AddonName);
         var frame = board == null ? null : BoardReader.Read(board, this.frameCounter, this.objects.LocalPlayer?.Name.TextValue);
         var resultVisible = this.IsVisible(ResultAddon);
@@ -300,7 +309,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
 
         var history = this.journal.RulesHistory(npc.TriadId);
         var (rules, _) = DeckRules.ExpectedRules(npc, history);
-        this.DeckPrep.Start(npc, rules, history.Count == 0, owned, Collection.SavedDecks(data.Cards), data.Cards,
+        this.DeckPrep.Start(npc, rules, history.Count == 0, owned, Collection.SavedDecks(data.Cards), data.Cards, this.Character.Cache,
             this.Configuration.DeckWriteSlot, () => this.ChooseSessionDeck(data, npc));
     }
 
@@ -309,7 +318,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
     {
         var history = this.journal.RulesHistory(npc.TriadId);
         var (rules, _) = DeckRules.ExpectedRules(npc, history);
-        this.DeckChooser.Start(npc, rules, history.Count == 0, Collection.SavedDecks(data.Cards), data.Cards);
+        this.DeckChooser.Start(npc, rules, history.Count == 0, Collection.SavedDecks(data.Cards), data.Cards, this.Character.Cache);
     }
 
     // Queues for Open Tournaments with the targeted Official; the draft and matches run on auto.
@@ -338,7 +347,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
             return "could not read the card collection";
         this.journal.WriteOwned(owned);
         var (rules, source) = DeckRules.ExpectedRules(npc, this.journal.RulesHistory(npc.TriadId));
-        this.Decks.Start(npc, rules, source, owned, Collection.SavedDecks(data.Cards), data.Cards);
+        this.Decks.Start(npc, rules, source, owned, Collection.SavedDecks(data.Cards), data.Cards, this.Character.Cache);
         this.Log.Information($"[Deck] searching decks against {npc.Name} [{rules}] ({source}), {owned.Count} owned cards");
         return null;
     }

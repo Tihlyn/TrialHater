@@ -5,7 +5,7 @@ using TrialHater.Core.Rules;
 namespace TrialHater.Game;
 
 // Runs the deck optimiser for one NPC on a worker, one search at a time; a new search cancels the
-// previous one. The UI reads the properties (each one a single reference write from the worker).
+// previous one. With the character's deck cache, a search already run is reused. The UI reads the properties (each one a single reference write from the worker).
 public sealed class DeckService : IDisposable
 {
     private readonly Action<Exception, string> error;
@@ -32,7 +32,8 @@ public sealed class DeckService : IDisposable
 
     public DeckSearchResult? Result { get; private set; }
 
-    public void Start(NpcDeck npc, RuleSet rules, string rulesSource, IReadOnlyCollection<CardInfo> owned, IReadOnlyList<SavedDeck> saved, CardCatalog catalog)
+    public void Start(NpcDeck npc, RuleSet rules, string rulesSource, IReadOnlyCollection<CardInfo> owned, IReadOnlyList<SavedDeck> saved, CardCatalog catalog,
+        DeckCache? cache)
     {
         this.Cancel();
         var source = new CancellationTokenSource();
@@ -51,7 +52,7 @@ public sealed class DeckService : IDisposable
             try
             {
                 var result = DeckOptimizer.Find(npc, rules, owned, saved.Select(d => d.Cards).ToList(), catalog, new DeckSearchOptions(),
-                    p => this.Progress = p, token);
+                    p => this.Progress = p, token, cache);
                 if (!token.IsCancellationRequested)
                 {
                     this.Result = result;

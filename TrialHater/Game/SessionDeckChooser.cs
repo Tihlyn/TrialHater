@@ -49,7 +49,7 @@ public sealed class SessionDeckChooser : IDisposable
         }
     }
 
-    public void Start(NpcDeck npc, RuleSet rules, bool sheetRulesOnly, IReadOnlyList<SavedDeck> saved, CardCatalog catalog)
+    public void Start(NpcDeck npc, RuleSet rules, bool sheetRulesOnly, IReadOnlyList<SavedDeck> saved, CardCatalog catalog, DeckCache? cache)
     {
         this.Cancel();
         this.Row = -1;
@@ -77,7 +77,7 @@ public sealed class SessionDeckChooser : IDisposable
         {
             try
             {
-                var scores = DeckOptimizer.RankSaved(npc, rules, saved.Select(d => d.Cards).ToList(), catalog, new DeckEvaluationOptions(), token);
+                var scores = DeckOptimizer.RankSaved(npc, rules, saved.Select(d => d.Cards).ToList(), catalog, new DeckEvaluationOptions(), token, cache);
                 if (token.IsCancellationRequested)
                     return;
                 if (scores.Count != saved.Count)

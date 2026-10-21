@@ -3,6 +3,7 @@ using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
 using Dalamud.Interface.Windowing;
 using TrialHater.Core.Session;
+using TrialHater.Game;
 
 namespace TrialHater.Windows;
 
@@ -12,13 +13,15 @@ public sealed class ConfigWindow : Window
 
     private readonly Configuration configuration;
     private readonly IdleGuard idleGuard;
+    private readonly CharacterData character;
     private Theme.Scope theme;
 
-    public ConfigWindow(Configuration configuration, IdleGuard idleGuard)
+    public ConfigWindow(Configuration configuration, IdleGuard idleGuard, CharacterData character)
         : base("TrialHater settings###TrialHaterConfig", ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse)
     {
         this.configuration = configuration;
         this.idleGuard = idleGuard;
+        this.character = character;
         this.Size = Theme.ConfigSize;
         this.SizeCondition = ImGuiCond.FirstUseEver;
         this.SizeConstraints = new WindowSizeConstraints { MinimumSize = Theme.ConfigMinimum, MaximumSize = Theme.Maximum };
@@ -161,6 +164,8 @@ public sealed class ConfigWindow : Window
             changed = true;
         }
 
+        this.DrawDeckCache();
+
         Widgets.Section("Open Tournament");
         var autoDraft = c.AutoDraft;
         if (Widgets.ToggleRow("Draft the advised deck", ref autoDraft,
@@ -180,6 +185,22 @@ public sealed class ConfigWindow : Window
         }
 
         return changed;
+    }
+
+    // The logged-in character's deck cache: what it holds, and a way to start over.
+    private void DrawDeckCache()
+    {
+        if (this.character.Cache is not { } cache)
+        {
+            Widgets.Muted("Deck cache: log in to a character (it is kept per character).");
+            return;
+        }
+
+        Widgets.Muted($"Deck cache for {this.character.Name}: {cache.Searches} search(es), {cache.Scores} deck score(s).");
+        Widgets.HoverTooltip("A deck search against an NPC is reused until a newly obtained card would be among the cards it tries,\n"
+                             + "and each deck's score is kept per NPC and rules. Kept per character, since collections differ.");
+        if (cache.Searches + cache.Scores > 0 && Widgets.DangerButton("Clear the deck cache"))
+            this.character.ClearCache();
     }
 
     // A label on its own line; the control under it takes the full width.

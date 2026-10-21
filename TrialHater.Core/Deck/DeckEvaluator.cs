@@ -35,6 +35,8 @@ public sealed record DeckEvaluationOptions
     public IOpponentModel Model { get; init; } = new GreedyOpponent(0.1);
 
     public int TableBits { get; init; } = 18;
+
+    public string Signature => $"{this.Playouts},{this.QuickPlayouts},{this.TableBits},{this.Model.Name}";
 }
 
 // Two evaluations of a deck:

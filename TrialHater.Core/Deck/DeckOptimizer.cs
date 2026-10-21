@@ -3,7 +3,8 @@ using TrialHater.Core.Rules;
 
 namespace TrialHater.Core.Deck;
 
-public sealed record DeckSearchResult(IReadOnlyList<DeckScore> Best, IReadOnlyList<DeckScore> Saved, string Status);
+// CachedAt: when the search was run, if this result was reused from the DeckCache.
+public sealed record DeckSearchResult(IReadOnlyList<DeckScore> Best, IReadOnlyList<DeckScore> Saved, string Status, DateTimeOffset? CachedAt = null);
 
 public sealed record DeckSearchOptions
 {
@@ -20,6 +21,10 @@ public sealed record DeckSearchOptions
     public int Results { get; init; } = 5;
 
     public DeckEvaluationOptions Evaluation { get; init; } = new();
+
+    // Everything here that changes results, for the DeckCache keys.
+    public string Signature
+        => $"{this.TopFive},{this.TopFour},{this.TopLow},{this.Finalists},{this.Results}|{this.Evaluation.Signature}";
 }
 
 // Finds the best decks among the owned cards for one NPC (docs/RESEARCH.md, "Deck optimiser"):
@@ -28,12 +33,13 @@ public sealed record DeckSearchOptions
 //    (simulated games, we take the most cards now, the NPC follows its model),
 // 3. evaluate the finalists and the player's saved decks exactly (DeckEvaluator) and rank them by
 //    expected result per game.
+// With a DeckCache, a search whose candidates are unchanged and any deck already scored are reused.
 // Under Order the deck's order is the play order: the finalists' best order is searched too.
 public static class DeckOptimizer
 {
     public static DeckSearchResult Find(NpcDeck npc, RuleSet rules, IReadOnlyCollection<CardInfo> owned,
         IReadOnlyList<IReadOnlyList<CardInfo>> saved, CardCatalog catalog, DeckSearchOptions options,
-        Action<string>? progress = null, CancellationToken cancel = default)
+        Action<string>? progress = null, CancellationToken cancel = default, DeckCache? cache = null)
     {
         if (rules.Has(TriadRule.Random))
             return new DeckSearchResult([], [], "Random rule: the game deals from the whole collection, the deck does not matter");
@@ -50,6 +56,17 @@ public static class DeckOptimizer
         var five = ranked.Where(c => c.Stars >= 5).Take(options.TopFive).ToList();
         var four = ranked.Where(c => c.Stars == 4).Take(options.TopFour).ToList();
         var low = ranked.Where(c => c.Stars <= 3).Take(options.TopLow).ToList();
+        var exact = !evalRules.Has(TriadRule.Chaos) && !evalRules.Has(TriadRule.Order);
+        var context = DeckCache.Context(npc, evalRules.Mask, options.Signature);
+        var tiers = $"{DeckCache.DeckKey(five)}/{DeckCache.DeckKey(four)}/{DeckCache.DeckKey(low)}";
+        var savedDecks = saved.Where(d => d.Count == DeckRules.Size).ToList();
+        if (cache?.Search(context, tiers, catalog) is { } hit)
+        {
+            progress?.Invoke("reusing the cached search");
+            var savedScores = Scores(savedDecks, hands, rules, options.Evaluation, exact, cache, context, catalog, progress, cancel);
+            return hit with { Saved = savedScores };
+        }
+
         var candidates = Candidates(five, four, low).ToList();
         if (candidates.Count == 0)
             return new DeckSearchResult([], [], "not enough owned cards for a legal deck");
@@ -67,40 +84,55 @@ public static class DeckOptimizer
             finalists = finalists.Select(deck => BestOrder(deck, hands, rules, options.Evaluation, cancel)).ToList();
         }
 
-        var exact = !evalRules.Has(TriadRule.Chaos) && !evalRules.Has(TriadRule.Order);
-        // Decks run side by side (each also splits its deals), so the cores stay busy.
-        var all = finalists.Concat(saved.Where(d => d.Count == DeckRules.Size)).ToList();
-        var results = new DeckScore[all.Count];
-        var done = 0;
-        progress?.Invoke($"{(exact ? "exact" : "simulated")} evaluation of {all.Count} decks");
-        Parallel.For(0, all.Count, new ParallelOptions { CancellationToken = cancel }, i =>
-        {
-            results[i] = Final(all[i], hands, rules, options.Evaluation, exact, cancel);
-            progress?.Invoke($"{(exact ? "exact" : "simulated")} evaluation {Interlocked.Increment(ref done)}/{all.Count}");
-        });
+        var results = Scores(finalists.Concat(savedDecks).ToList(), hands, rules, options.Evaluation, exact, cache, context, catalog, progress, cancel);
         var scored = results.Take(finalists.Count).ToList();
-        var savedScores = results.Skip(finalists.Count).ToList();
+        var savedResults = results.Skip(finalists.Count).ToList();
 
         var best = scored.OrderByDescending(s => s.Expected).ThenByDescending(s => s.PerfectWin - s.PerfectLoss)
             .Take(options.Results).ToList();
         var how = exact ? "exact solve per deal + safe play" : "simulated games (Chaos/Order: no exact search)";
-        return new DeckSearchResult(best, savedScores, $"{npc.Name} [{rules}]: {hands.Count} NPC hand(s), {candidates.Count} decks tried, {how}");
+        var status = $"{npc.Name} [{rules}]: {hands.Count} NPC hand(s), {candidates.Count} decks tried, {how}";
+        cache?.PutSearch(context, tiers, npc.Name, evalRules.ToString(), best, status);
+        return new DeckSearchResult(best, savedResults, status);
     }
 
     // Scores only the given decks (a session choosing among the saved decks), in their order.
     // Empty when the NPC has no deck data or the deck does not matter (Random).
     public static IReadOnlyList<DeckScore> RankSaved(NpcDeck npc, RuleSet rules, IReadOnlyList<IReadOnlyList<CardInfo>> saved,
-        CardCatalog catalog, DeckEvaluationOptions options, CancellationToken cancel = default)
+        CardCatalog catalog, DeckEvaluationOptions options, CancellationToken cancel = default, DeckCache? cache = null)
     {
         var hands = DeckRules.NpcHands(npc, catalog);
         if (hands.Count == 0 || rules.Has(TriadRule.Random))
             return [];
         var evalRules = DeckRules.ForEvaluation(rules);
         var exact = !evalRules.Has(TriadRule.Chaos) && !evalRules.Has(TriadRule.Order);
-        var results = new DeckScore[saved.Count];
-        Parallel.For(0, saved.Count, new ParallelOptions { CancellationToken = cancel },
-            i => results[i] = Final(saved[i], hands, rules, options, exact, cancel));
-        return results;
+        // The same context as Find with default search options, so a session's ranking reuses the
+        // deck builder's scores and the other way round.
+        var context = DeckCache.Context(npc, evalRules.Mask, new DeckSearchOptions { Evaluation = options }.Signature);
+        return Scores(saved, hands, rules, options, exact, cache, context, catalog, null, cancel);
+    }
+
+    // The final score of each deck, from the cache where it has one. Decks run side by side (each
+    // also splits its deals), so the cores stay busy.
+    private static IReadOnlyList<DeckScore> Scores(IReadOnlyList<IReadOnlyList<CardInfo>> decks, List<CardStats[]> hands, RuleSet rules,
+        DeckEvaluationOptions options, bool exact, DeckCache? cache, string context, CardCatalog catalog, Action<string>? progress,
+        CancellationToken cancel)
+    {
+        var results = decks.Select(d => cache?.Score(context, d, catalog)).ToArray();
+        var missing = Enumerable.Range(0, decks.Count).Where(i => results[i] is null).ToList();
+        var kind = exact ? "exact" : "simulated";
+        var done = 0;
+        if (missing.Count > 0)
+            progress?.Invoke($"{kind} evaluation of {missing.Count} decks");
+        Parallel.For(0, missing.Count, new ParallelOptions { CancellationToken = cancel }, k =>
+        {
+            var i = missing[k];
+            var score = Final(decks[i], hands, rules, options, exact, cancel);
+            results[i] = score;
+            cache?.PutScore(context, score);
+            progress?.Invoke($"{kind} evaluation {Interlocked.Increment(ref done)}/{missing.Count}");
+        });
+        return results.Select(r => r!).ToList();
     }
 
     // Under Order with exact off the final score is simulated; give it the exact budget of games.

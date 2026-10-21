@@ -98,6 +98,7 @@ public sealed class MainWindow : Window
         if (ImGui.BeginTabItem("Tournament"))
         {
             this.DrawTournamentQueue();
+            this.DrawDraftRecord();
             this.DrawTournaments();
             ImGui.EndTabItem();
         }
@@ -158,7 +159,7 @@ public sealed class MainWindow : Window
 
         if (plugin.Decks.Running)
         {
-            this.Activity("DECK SEARCH", $"{plugin.Decks.Npc?.Name}: {plugin.Decks.Progress}");
+            this.Activity("DECK SEARCH", $"{plugin.Decks.Npc?.Name}: {plugin.Decks.Progress}", working: true);
             ImGui.SameLine();
             if (ImGui.SmallButton("Cancel##decks"))
                 plugin.Decks.Cancel();
@@ -170,10 +171,16 @@ public sealed class MainWindow : Window
         Widgets.Ornament();
     }
 
-    private void Activity(string label, string text)
+    private void Activity(string label, string text, bool working = false)
     {
         Widgets.Chip(label, Theme.Good);
         ImGui.SameLine(0f, Theme.Px(Theme.Gap));
+        if (working)
+        {
+            Widgets.Spinner(Theme.Good);
+            ImGui.SameLine(0f, Theme.Px(Theme.SmallGap));
+        }
+
         ImGui.TextUnformatted(text);
     }
 
@@ -355,7 +362,23 @@ public sealed class MainWindow : Window
 
         if (decision is null)
         {
-            Widgets.Muted(this.plugin.Analysis.Busy ? "Solving..." : "No decision yet.");
+            var analysis = this.plugin.Analysis;
+            if (analysis.Busy)
+            {
+                // Past the exploit budget (plus the exact solve before it) the search is slow.
+                var elapsed = (DateTime.UtcNow - analysis.StartedAt).TotalSeconds;
+                var slow = elapsed > this.plugin.Configuration.ExploitBudgetSeconds + 5;
+                Widgets.Busy($"Solving... {elapsed:0.0} s{(slow ? " (longer than usual)" : string.Empty)}", slow ? Theme.Warn : Theme.Good);
+            }
+            else if (analysis.Error is { } error && error.Fingerprint == view.Fingerprint())
+            {
+                Widgets.Text($"The solver failed: {error.Message}. Details in /xllog; it retries when the board changes.", Theme.Red);
+            }
+            else
+            {
+                Widgets.Muted("No decision yet.");
+            }
+
             return;
         }
 
@@ -420,7 +443,10 @@ public sealed class MainWindow : Window
             Widgets.Chips(draft.Rules.Rules.Select(r => (this.RuleName(r), Theme.Gold)));
             if (draft.Running || draft.Advice is not { } advice)
             {
-                Widgets.Text(draft.Status, draft.Running ? Theme.Good : Theme.Warn);
+                if (draft.Running)
+                    Widgets.Busy(draft.Status, Theme.Good);
+                else
+                    Widgets.Text(draft.Status, Theme.Warn);
                 return;
             }
 
@@ -460,6 +486,8 @@ public sealed class MainWindow : Window
                         if (chosen)
                             ImGui.TableSetBgColor(ImGuiTableBgTarget.CellBg, Theme.Color(Theme.GoodFill));
                         Widgets.Text(chosen ? $"> {cards}" : $"{cards}  {option.Value - best.Expected:+0.00;-0.00;0.00}", chosen ? Theme.Good : Theme.Muted);
+                        if (this.plugin.Character.Drafts is { } record)
+                            DraftTrack(record, draft.Rules, option.Cards);
                     }
                 }
 
@@ -468,6 +496,49 @@ public sealed class MainWindow : Window
 
             Widgets.Muted(advice.Status);
         }
+    }
+
+    // How an option's cards did when we drafted them before under these rules.
+    private static void DraftTrack(DraftRecord record, RuleSet rules, IReadOnlyList<CardInfo> cards)
+    {
+        var tracks = cards.Select(c => (Card: c, Track: record.Card(rules, c.Id))).Where(x => x.Track.Vetted + x.Track.Discarded > 0).ToList();
+        if (tracks.Count == 0)
+            return;
+        var vetted = tracks.Sum(x => x.Track.Vetted);
+        var discarded = tracks.Sum(x => x.Track.Discarded);
+        Widgets.Text($"vetted {vetted}, discarded {discarded}", vetted >= discarded ? Theme.Good : Theme.Red);
+        Widgets.HoverTooltip(string.Join("\n", tracks.Select(x => $"{x.Card.Name}: top half {x.Track.Vetted}x, bottom half {x.Track.Discarded}x")));
+    }
+
+    // Our past tournaments: the deck we drafted and how it placed (vetted = top half).
+    private void DrawDraftRecord()
+    {
+        if (this.plugin.Character.Drafts is not { Results.Count: > 0 } record)
+            return;
+        var results = record.Results;
+        Widgets.Section("Our drafts");
+        Widgets.Muted($"{this.plugin.Character.Name}: {results.Count(r => r.Vetted)} vetted, {results.Count(r => !r.Vetted)} discarded "
+                      + $"(top {DraftRecord.VettedRank} of 8 = vetted). Ties in the draft advice go to the cards with the better record.");
+        if (!ImGui.BeginTable("drafts", 4, ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingStretchProp))
+            return;
+        ImGui.TableSetupColumn("When", ImGuiTableColumnFlags.WidthFixed, Theme.Px(80f));
+        ImGui.TableSetupColumn("Place", ImGuiTableColumnFlags.WidthFixed, Theme.Px(70f));
+        ImGui.TableSetupColumn("Expected", ImGuiTableColumnFlags.WidthFixed, Theme.Px(60f));
+        ImGui.TableSetupColumn("Deck");
+        ImGui.TableHeadersRow();
+        foreach (var r in results.Reverse().Take(12))
+        {
+            var color = r.Vetted ? Theme.Good : Theme.Red;
+            ImGui.TableNextRow();
+            Cell($"{r.Tournament.ToLocalTime():ddd HH:mm}", Theme.Gold);
+            Cell($"{r.Rank} ({r.Points} pts)", color);
+            Cell(r.Expected is { } e ? $"{e:+0.00;-0.00;0.00}" : "-", Theme.Muted);
+            var names = r.Deck.Select(id => this.plugin.Data?.Cards.Get(id)?.Name ?? $"#{id}");
+            Cell((r.Advised ? "" : "(not the advice) ") + string.Join(", ", names), r.Advised ? Theme.Text : Theme.Warn);
+            Widgets.HoverTooltip(string.Join(", ", r.Rules.Rules.Select(this.RuleName)));
+        }
+
+        ImGui.EndTable();
     }
 
     // Farming: talk, challenge, deck, auto play, rematch until the goal, quit.
@@ -507,6 +578,8 @@ public sealed class MainWindow : Window
         }
 
         Widgets.Text(session.Status, session.Active ? Theme.Good : Theme.Muted);
+        if ((this.plugin.DeckPrep.Pending ?? (this.plugin.DeckChooser.Running ? "ranking the saved decks against this NPC" : null)) is { } pending)
+            Widgets.Busy(pending, Theme.Good);
         if (config.SessionPicksDeck && this.plugin.DeckChooser.Summary.Length > 0)
             Widgets.Muted(this.plugin.DeckChooser.Summary);
         if (config.SessionBuildsDeck && this.plugin.DeckPrep.Summary.Length > 0)
@@ -522,7 +595,7 @@ public sealed class MainWindow : Window
         Widgets.Section("Deck builder");
         if (decks.Running)
         {
-            Widgets.Text($"Searching against {decks.Npc?.Name}: {decks.Progress}", Theme.Good);
+            Widgets.Busy($"Searching against {decks.Npc?.Name}: {decks.Progress}", Theme.Good);
             if (ImGui.SmallButton("Cancel"))
                 decks.Cancel();
         }
@@ -544,6 +617,8 @@ public sealed class MainWindow : Window
         Widgets.Chips(decks.Rules.Rules.Select(r => (this.RuleName(r), Theme.Gold)));
         if (decks.Result is not { } result)
             return;
+        if (result.CachedAt is { } cachedAt)
+            Widgets.Text($"Reused the search of {cachedAt.ToLocalTime():g}: no card obtained since would be tried.", Theme.Good);
         Widgets.Muted($"{result.Status}. Expected = wins minus losses per game against the NPC model (+1 = always win).");
         if (ImGui.BeginTable("decks", 4, ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingStretchProp))
         {

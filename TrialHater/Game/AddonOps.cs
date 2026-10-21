@@ -102,6 +102,27 @@ internal static unsafe class AddonOps
         return v.Type is AtkValueType.Int or AtkValueType.UInt ? v.Int : 0;
     }
 
+    // A Bool AtkValue, or false (absent, other type).
+    public static bool BoolValue(AtkUnitBase* addon, int index)
+    {
+        if (addon == null || index < 0 || index >= addon->AtkValuesCount)
+            return false;
+        ref var v = ref addon->AtkValues[index];
+        return v.Type == AtkValueType.Bool && v.Byte != 0;
+    }
+
+    // An Int/UInt AtkValue, or a string holding a number; null otherwise.
+    public static int? NumberValue(AtkUnitBase* addon, int index)
+    {
+        if (addon == null || index < 0 || index >= addon->AtkValuesCount)
+            return null;
+        ref var v = ref addon->AtkValues[index];
+        if (v.Type is AtkValueType.Int or AtkValueType.UInt)
+            return v.Int;
+        var digits = new string(StringValue(addon, index).Where(char.IsDigit).ToArray());
+        return int.TryParse(digits, out var n) ? n : null;
+    }
+
     // A string AtkValue, or "" (absent, other type).
     public static string StringValue(AtkUnitBase* addon, int index)
     {

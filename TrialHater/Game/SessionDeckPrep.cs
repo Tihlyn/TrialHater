@@ -42,7 +42,7 @@ public sealed class SessionDeckPrep : IDisposable
 
     // `fallback` ranks the saved decks the usual way, if building fails.
     public void Start(NpcDeck npc, RuleSet rules, bool sheetRulesOnly, IReadOnlyCollection<CardInfo> owned, IReadOnlyList<SavedDeck> savedDecks,
-        CardCatalog catalog, int writeSlot, Action fallback)
+        CardCatalog catalog, DeckCache? cache, int writeSlot, Action fallback)
     {
         this.Cancel();
         this.fallback = fallback;
@@ -56,7 +56,7 @@ public sealed class SessionDeckPrep : IDisposable
         this.Summary = string.Empty;
         var token = source.Token;
         this.search = Task.Run(() => DeckOptimizer.Find(npc, rules, owned, savedDecks.Select(d => d.Cards).ToList(), catalog,
-            new DeckSearchOptions(), p => this.progress = p, token), token);
+            new DeckSearchOptions(), p => this.progress = p, token, cache), token);
         this.log($"[Deck] session: building the best deck against {npc.Name} [{rules}]");
     }
 
@@ -99,6 +99,8 @@ public sealed class SessionDeckPrep : IDisposable
 
     private void Decide(DeckSearchResult result, DeckWriter writer, SessionDeckChooser chooser)
     {
+        if (result.CachedAt is { } at)
+            this.log($"[Deck] session: reused the search of {at.ToLocalTime():g} (deck cache: no new card would change it)");
         var bestSaved = Enumerable.Range(0, Math.Min(this.saved.Count, result.Saved.Count))
             .OrderByDescending(i => result.Saved[i].Expected)
             .ThenBy(i => this.saved[i].Index)
