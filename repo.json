@@ -4,7 +4,7 @@
     "Name": "TrialHater",
     "InternalName": "TrialHater",
     "AssemblyVersion": "0.2.0.0",
-    "Description": "Reads Triple Triad matches from the game, enumerates the NPC's possible hands, solves every one exactly and plays the move that keeps the best guaranteed result while exploiting how NPCs play. Private tool; not for the official repository.",
+    "Description": "Suggests and builds optimal decks, farms open world NPCs, autoplays tournaments. Works against players and NPCs",
     "ApplicableVersion": "any",
     "RepoUrl": "https://github.com/Tihlyn/TrialHater",
     "Tags": [
@@ -20,7 +20,7 @@
     "LoadSync": false,
     "CanUnloadAsync": true,
     "LoadPriority": 0,
-    "Punchline": "Triple Triad: exact solver, NPC hand reading and automated play.",
+    "Punchline": "Triple Triad: ain't nobody got time fo dat",
     "AcceptsFeedback": true,
     "DownloadLinkInstall": "https://github.com/Tihlyn/TrialHater/releases/download/v0.2.0/latest.zip",
     "DownloadLinkUpdate": "https://github.com/Tihlyn/TrialHater/releases/download/v0.2.0/latest.zip",
