@@ -13,10 +13,13 @@ public sealed record NpcDeck(
     IReadOnlyList<TriadRule> Rules,
     bool UsesRegionalRules,
     ushort Fee,
-    IReadOnlyList<uint> RewardItems)
+    IReadOnlyList<NpcReward> Rewards)
 {
     public int VariablePicks => Math.Max(0, 5 - this.Fixed.Count);
 }
+
+// A card the NPC can drop on a win, and the item that carries it (won cards arrive as items).
+public sealed record NpcReward(ushort CardId, uint ItemId);
 
 public sealed class NpcCatalog
 {

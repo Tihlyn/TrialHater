@@ -71,10 +71,13 @@ public sealed record SessionAction(SessionActionKind Kind, string Window, string
     public static SessionAction Wait(string reason) => new(SessionActionKind.Wait, string.Empty, string.Empty, reason);
 }
 
-public sealed record SessionGoal(int MaxMatches, bool StopRequested)
+public sealed record SessionGoal(int MaxMatches, bool StopRequested, bool CardsCollected = false)
 {
-    // MaxMatches 0 = until stopped.
-    public bool Reached(int matchesDone) => this.StopRequested || (this.MaxMatches > 0 && matchesDone >= this.MaxMatches);
+    // MaxMatches 0 = until stopped. CardsCollected: a card session has every card it farms for.
+    public bool Reached(int matchesDone) => this.StopRequested || this.CardsCollected || (this.MaxMatches > 0 && matchesDone >= this.MaxMatches);
+
+    public string Why(int matchesDone)
+        => this.StopRequested ? "stop requested" : this.CardsCollected ? "every reward card collected" : $"{matchesDone} match(es) played";
 }
 
 // Decides the single next session action from what is on screen. The window being shown is the
@@ -94,7 +97,7 @@ public static class SessionPlanner
         if (s.ResultOpen)
         {
             return stopping
-                ? new SessionAction(SessionActionKind.Quit, "TripleTriadResult", s.ResultKey, goal.StopRequested ? "stop requested" : $"{matchesDone} match(es) played")
+                ? new SessionAction(SessionActionKind.Quit, "TripleTriadResult", s.ResultKey, goal.Why(matchesDone))
                 : new SessionAction(SessionActionKind.Rematch, "TripleTriadResult", s.ResultKey, $"match {matchesDone + 1} next");
         }
 
@@ -129,7 +132,7 @@ public static class SessionPlanner
         if (s.Preparing is { } preparing)
             return SessionAction.Wait(preparing);
         if (stopping)
-            return new SessionAction(SessionActionKind.Done, string.Empty, string.Empty, goal.StopRequested ? "stopped" : $"{matchesDone} match(es) played");
+            return new SessionAction(SessionActionKind.Done, string.Empty, string.Empty, goal.StopRequested ? "stopped" : goal.Why(matchesDone));
         if (s.PlayerOccupied)
             return SessionAction.Wait("the game has the player occupied");
         if (!s.CanInteract)

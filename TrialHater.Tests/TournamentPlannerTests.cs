@@ -43,4 +43,16 @@ public class TournamentPlannerTests
         Assert.Equal(TournamentActionKind.CloseReward, Next(new TournamentSnapshot { RewardOpen = true }, TournamentPhase.Playing));
         Assert.Equal(TournamentActionKind.Wait, Next(new TournamentSnapshot { CanInteract = true, InDuty = true }, TournamentPhase.Playing));
     }
+
+    // 2026-10-22: leaving the duty cleared the target and the next sign-up waited for the player.
+    [Fact]
+    public void TargetsTheOfficialAgainAfterTheDuty()
+    {
+        Assert.Equal(TournamentActionKind.Retarget, Next(new TournamentSnapshot { OfficialInRange = true }));
+        Assert.Equal(TournamentActionKind.Interact, Next(new TournamentSnapshot { OfficialInRange = true, CanInteract = true }));
+        Assert.Equal(TournamentActionKind.Wait, Next(new TournamentSnapshot { OfficialInRange = true, InDuty = true }));
+        Assert.Equal(TournamentActionKind.Wait, Next(new TournamentSnapshot { OfficialInRange = true, PlayerOccupied = true }));
+        Assert.Equal(TournamentActionKind.Wait, Next(new TournamentSnapshot { OfficialInRange = true }, TournamentPhase.Queued));
+        Assert.Equal(TournamentActionKind.Wait, Next(new TournamentSnapshot()));
+    }
 }

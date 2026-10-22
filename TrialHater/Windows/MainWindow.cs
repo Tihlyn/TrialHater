@@ -8,6 +8,7 @@ using TrialHater.Core.Match;
 using TrialHater.Core.Policy;
 using TrialHater.Core.Rules;
 using TrialHater.Core.Tournament;
+using TrialHater.Game;
 
 namespace TrialHater.Windows;
 
@@ -125,8 +126,7 @@ public sealed class MainWindow : Window
         var session = plugin.Session;
         if (session.Active)
         {
-            var goal = session.MaxMatches == 0 ? "until stopped" : $"{session.MatchesDone}/{session.MaxMatches}";
-            this.Activity("FARMING", $"{session.NpcName}  {goal}  ·  {session.Wins}W {session.Draws}D {session.Losses}L");
+            this.Activity("FARMING", $"{session.NpcName}  {Goal(session)}  ·  {session.Wins}W {session.Draws}D {session.Losses}L");
             if (!session.StopRequested)
             {
                 ImGui.SameLine();
@@ -564,7 +564,16 @@ public sealed class MainWindow : Window
             if (Widgets.Button("Start farming", true))
                 this.sessionError = this.plugin.StartSession();
             ImGui.SameLine();
+            if (Widgets.Button("Farm until every card drops", true))
+                this.sessionError = this.plugin.StartSession(untilCards: true);
+            Widgets.HoverTooltip("Farms until every card this NPC drops is in the collection or in the bags, then quits. The match count is not used.");
             Widgets.Muted("Target the NPC and stand next to it.");
+            if (this.plugin.FacingRewards() is { } rewards)
+            {
+                Widgets.Muted(rewards.Cards.Count == 0 ? $"{rewards.Npc} drops no cards." : $"{rewards.Npc} drops ({rewards.Cards.Count(c => !c.Collected)} missing):");
+                Widgets.Chips(rewards.Cards.Select(c => (c.Collected ? $"{c.Card} (have)" : c.Card, c.Collected ? Theme.Muted : Theme.Gold)));
+            }
+
             if (this.sessionError is { } error)
                 Widgets.Text(error, Theme.Warn);
             if (session.HasRecap)
@@ -575,9 +584,10 @@ public sealed class MainWindow : Window
         }
         else
         {
-            var goal = session.MaxMatches == 0 ? "until stopped" : $"{session.MatchesDone}/{session.MaxMatches}";
-            ImGui.TextUnformatted($"Farming {session.NpcName}: {goal}");
+            ImGui.TextUnformatted($"Farming {session.NpcName}: {Goal(session)}");
             Widgets.Chips([($"{session.Wins} won", Theme.Good), ($"{session.Draws} drawn", Theme.Gold), ($"{session.Losses} lost", Theme.Red)]);
+            if (session.UntilCards)
+                Widgets.Chips(session.MissingCards.Select(c => (c, Theme.Gold)));
             if (!session.StopRequested && ImGui.Button("Stop after this match"))
                 session.StopRequested = true;
             if (!session.StopRequested)
@@ -596,6 +606,10 @@ public sealed class MainWindow : Window
         if (session.LastAction.Length > 0)
             Widgets.Muted($"Last: {session.LastAction}");
     }
+
+    private static string Goal(SessionRunner session)
+        => session.UntilCards ? $"until every card drops ({session.MissingCards.Count} missing, {session.MatchesDone} played)"
+            : session.MaxMatches == 0 ? "until stopped" : $"{session.MatchesDone}/{session.MaxMatches}";
 
     // Best decks from the collection against the NPC we face, and how the saved decks compare.
     private void DrawDeckBuilder()

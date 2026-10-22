@@ -5,6 +5,19 @@ Notable changes are recorded here using the Keep a Changelog format and semantic
 
 ## Unreleased
 
+### Added
+
+- Farming: "Farm until every card drops" farms the targeted NPC until every card it can drop is
+  collected, then quits. A won card counts as soon as it is in the bags, before it is registered.
+  The panel lists the targeted NPC's reward cards and which are still missing. The session will not
+  start with full bags, and stops after the current match if they fill up.
+
+### Fixed
+
+- Open Tournament queue: after a tournament the queue no longer stalls waiting for the Official to
+  be targeted. Leaving the duty clears the target; the Official is now targeted again when it is in
+  range, and the next sign-up goes on.
+
 ## [0.2.6] - 2026-10-22
 
 ### Changed

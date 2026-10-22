@@ -95,7 +95,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
                 var data = GameData.Load(dataManager);
                 this.Session.TriadMenuText = data.TriadMenuText;
                 this.Data = data;
-                log.Information($"[Data] {data.Cards.Count} cards, {data.Npcs.Count} NPC decks, {data.NpcBaseToTriad.Count} NPCs, {data.RuleNames.Count} rules.");
+                log.Information($"[Data] {data.Cards.Count} cards, {data.Npcs.Count} NPC decks ({data.Npcs.All.Count(n => n.Rewards.Count > 0)} dropping cards), {data.NpcBaseToTriad.Count} NPCs, {data.RuleNames.Count} rules.");
             }
             catch (Exception ex)
             {
@@ -274,6 +274,16 @@ public sealed unsafe class Plugin : IDalamudPlugin
         this.Session.DeckRow = pickDeck ? this.DeckChooser.Row : -1;
         this.Session.DeckCards = this.DeckChooser.Cards;
         this.Session.DeckPending = pickDeck && this.Session.Active ? this.DeckChooser.Pending : null;
+        if (this.Session is { Active: true, UntilCards: true } && data.Npcs.Get(this.Session.NpcTriadId) is { } farmed)
+        {
+            this.Session.UpdateMissing(MissingRewards(data, farmed));
+            if (!this.Session.StopRequested && this.Session.MissingCards.Count > 0 && Collection.FreeBagSlots() == 0)
+            {
+                this.Session.StopRequested = true;
+                this.Log.Warning("[Session] the bags are full; stopping after this match so a dropped card has room");
+            }
+        }
+
         if (!blocked)
         {
             this.Session.Tick(DateTime.UtcNow, this.Configuration.SessionDelayMs,
@@ -290,8 +300,9 @@ public sealed unsafe class Plugin : IDalamudPlugin
         this.IdleGuard.Tick(this.AutoPlayer.Enabled, this.Tracker.InMatch || this.Session.Active || this.Tournament.Active || inDuty, DateTime.UtcNow);
     }
 
-    // Farms the NPC we are facing.
-    public string? StartSession()
+    // Farms the NPC we are facing: for the set number of matches, or (untilCards) until every card
+    // it drops is collected.
+    public string? StartSession(bool untilCards = false)
     {
         if (this.Data is not { } data)
             return "sheets are still loading";
@@ -299,8 +310,15 @@ public sealed unsafe class Plugin : IDalamudPlugin
             return "target a Triple Triad NPC first";
         if (this.Tournament.Active)
             return "a tournament queue is running";
+        var missing = untilCards ? MissingRewards(data, npc) : null;
+        if (untilCards && npc.Rewards.Count == 0)
+            return $"{npc.Name} drops no cards";
+        if (missing is { Count: 0 })
+            return $"every card {npc.Name} drops is already collected";
+        if (untilCards && Collection.FreeBagSlots() == 0)
+            return "the bags are full: a dropped card needs a free slot";
         this.SetAutoPlay(true);
-        this.Session.Start(npc.TriadId, npc.Name, this.Configuration.SessionMaxMatches);
+        this.Session.Start(npc.TriadId, npc.Name, this.Configuration.SessionMaxMatches, missing);
         if (!this.Configuration.SessionPicksDeck)
             return null;
 
@@ -312,6 +330,18 @@ public sealed unsafe class Plugin : IDalamudPlugin
         else
             this.ChooseSessionDeck(data, npc);
         return null;
+    }
+
+    // The NPC's reward cards not collected yet, by name.
+    private static List<string> MissingRewards(GameData data, NpcDeck npc)
+        => npc.Rewards.Where(r => !Collection.Collected(r)).Select(r => data.Cards.Get(r.CardId)?.Name ?? $"#{r.CardId}").ToList();
+
+    // The facing NPC's reward cards and whether each is collected, for the farming panel.
+    public (string Npc, List<(string Card, bool Collected)> Cards)? FacingRewards()
+    {
+        if (this.Data is not { } data || this.FacingNpc(data) is not { } npc)
+            return null;
+        return (npc.Name, npc.Rewards.Select(r => (data.Cards.Get(r.CardId)?.Name ?? $"#{r.CardId}", Collection.Collected(r))).ToList());
     }
 
     // Builds the best deck against the session NPC first (SessionDeckPrep), then plays it.

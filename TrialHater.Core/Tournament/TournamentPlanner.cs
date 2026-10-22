@@ -30,6 +30,10 @@ public sealed record TournamentSnapshot
     // The Official is targeted and within interaction range, and the player is free to act.
     public bool CanInteract { get; init; }
 
+    // The Official is within interaction range but not targeted: leaving the tournament duty
+    // clears the target and puts the player back in front of the Official.
+    public bool OfficialInRange { get; init; }
+
     public bool PlayerOccupied { get; init; }
 }
 
@@ -43,6 +47,7 @@ public enum TournamentPhase
 public enum TournamentActionKind
 {
     Wait,
+    Retarget,
     Interact,
     AdvanceTalk,
     ChooseSignUp,
@@ -105,8 +110,10 @@ public static class TournamentPlanner
             return TournamentAction.Wait("still in the tournament duty");
         if (s.PlayerOccupied)
             return TournamentAction.Wait("the game has the player occupied");
-        return s.CanInteract
-            ? new TournamentAction(TournamentActionKind.Interact, "talk to the Official")
+        if (s.CanInteract)
+            return new TournamentAction(TournamentActionKind.Interact, "talk to the Official");
+        return s.OfficialInRange
+            ? new TournamentAction(TournamentActionKind.Retarget, "target the Official again")
             : TournamentAction.Wait("target the Open Tournament Official and stand next to it");
     }
 }

@@ -115,6 +115,10 @@ public sealed class GameData
             }
         }
 
+        // A reward item's AdditionalData is its card (all 136 rewarding NPCs, checked against
+        // ffxivcollect 2026-10-22).
+        var items = data.GetExcelSheet<Item>();
+        var catalog = new CardCatalog(cards);
         var decks = new List<NpcDeck>();
         foreach (var row in data.GetExcelSheet<Lumina.Excel.Sheets.TripleTriad>())
         {
@@ -123,7 +127,10 @@ public sealed class GameData
             if (fixedCards.Count + variable.Count == 0)
                 continue;
             var rules = row.TripleTriadRule.Select(r => (TriadRule)r.RowId).Where(r => r != TriadRule.None).ToList();
-            var rewards = row.ItemPossibleReward.Select(r => r.RowId).Where(id => id != 0).ToList();
+            var rewards = row.ItemPossibleReward.Select(r => r.RowId).Where(id => id != 0)
+                .Select(id => (Item: id, Card: items.GetRowOrDefault(id)?.AdditionalData.RowId ?? 0))
+                .Where(r => r.Card is > 0 and <= ushort.MaxValue && catalog.Get((ushort)r.Card) is not null)
+                .Select(r => new NpcReward((ushort)r.Card, r.Item)).ToList();
             decks.Add(new NpcDeck(row.RowId, triadNames.GetValueOrDefault(row.RowId, $"#{row.RowId}"),
                 fixedCards, variable, rules, row.UsesRegionalRules, row.Fee, rewards));
         }
@@ -147,6 +154,6 @@ public sealed class GameData
         }
 
         var menuText = data.GetExcelSheet<Addon>().GetRowOrDefault(TriadMenuTextRow)?.Text.ExtractText() ?? string.Empty;
-        return new GameData(new CardCatalog(cards), new NpcCatalog(decks), baseToTriad, ruleNames, tournamentRules, menuText);
+        return new GameData(catalog, new NpcCatalog(decks), baseToTriad, ruleNames, tournamentRules, menuText);
     }
 }

@@ -50,6 +50,21 @@ public class SessionPlannerTests
         Assert.Equal(SessionActionKind.Quit, Next(new SessionSnapshot { ResultOpen = true }, done: 0, new SessionGoal(0, StopRequested: true)));
     }
 
+    // A card session ignores the match count and quits once every reward card is in: at the
+    // result window when the card is already in the bags, else at the rematch's challenge window.
+    [Fact]
+    public void CardSessionQuitsOnceEveryCardIsCollected()
+    {
+        var missing = new SessionGoal(0, false, CardsCollected: false);
+        var collected = new SessionGoal(0, false, CardsCollected: true);
+        Assert.Equal(SessionActionKind.Rematch, Next(new SessionSnapshot { ResultOpen = true }, done: 500, missing));
+        var quit = SessionPlanner.Next(new SessionSnapshot { ResultOpen = true }, collected, 7, sessionStarted: true);
+        Assert.Equal(SessionActionKind.Quit, quit.Kind);
+        Assert.Equal("every reward card collected", quit.Reason);
+        Assert.Equal(SessionActionKind.DeclineRequest, Next(new SessionSnapshot { RequestOpen = true }, done: 7, collected));
+        Assert.Equal(SessionActionKind.Done, Next(new SessionSnapshot { CanInteract = true }, done: 7, collected));
+    }
+
     // 2026-10-19: the last result window opened before its buttons were live and the session
     // ended on the spot, leaving the window to the player.
     [Fact]

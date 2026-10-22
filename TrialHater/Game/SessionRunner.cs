@@ -68,6 +68,12 @@ public sealed unsafe class SessionRunner
 
     public int MaxMatches { get; set; } = 10;
 
+    // A card session farms until every card the NPC drops is collected; the match count is unused.
+    public bool UntilCards { get; private set; }
+
+    // A card session's reward cards not collected yet, by name (UpdateMissing).
+    public IReadOnlyList<string> MissingCards { get; private set; } = [];
+
     public bool StopRequested { get; set; }
 
     public int MatchesDone { get; private set; }
@@ -99,18 +105,32 @@ public sealed unsafe class SessionRunner
 
     public string LastAction { get; private set; } = string.Empty;
 
-    public void Start(uint npcTriadId, string npcName, int maxMatches)
+    // missingCards: a card session, farming until these are collected.
+    public void Start(uint npcTriadId, string npcName, int maxMatches, IReadOnlyList<string>? missingCards = null)
     {
         this.Active = true;
         this.NpcTriadId = npcTriadId;
         this.NpcName = npcName;
-        this.MaxMatches = maxMatches;
+        this.MaxMatches = missingCards is null ? maxMatches : 0;
+        this.UntilCards = missingCards is not null;
+        this.MissingCards = missingCards ?? [];
         this.StopRequested = false;
         this.HasRecap = false;
         this.MatchesDone = this.Wins = this.Draws = this.Losses = 0;
         this.currentKey = string.Empty;
         this.Status = "starting";
-        this.log($"[Session] started against {npcName} ({npcTriadId}), {(maxMatches == 0 ? "until stopped" : $"{maxMatches} match(es)")}");
+        var goal = missingCards is not null ? $"until {string.Join(", ", missingCards)} drop(s)" : maxMatches == 0 ? "until stopped" : $"{maxMatches} match(es)";
+        this.log($"[Session] started against {npcName} ({npcTriadId}), {goal}");
+    }
+
+    // Set by the plugin each frame of a card session.
+    public void UpdateMissing(IReadOnlyList<string> missing)
+    {
+        if (!this.Active || !this.UntilCards || missing.SequenceEqual(this.MissingCards))
+            return;
+        foreach (var card in this.MissingCards.Except(missing))
+            this.log($"[Session] {card} collected after {this.MatchesDone} match(es)");
+        this.MissingCards = missing;
     }
 
     public void Stop(string why)
@@ -145,7 +165,8 @@ public sealed unsafe class SessionRunner
         if (!this.Active)
             return;
 
-        var action = SessionPlanner.Next(snapshot, new SessionGoal(this.MaxMatches, this.StopRequested), this.MatchesDone, sessionStarted: this.MatchesDone > 0 || this.actedAt is not null);
+        var goal = new SessionGoal(this.MaxMatches, this.StopRequested, CardsCollected: this.UntilCards && this.MissingCards.Count == 0);
+        var action = SessionPlanner.Next(snapshot, goal, this.MatchesDone, sessionStarted: this.MatchesDone > 0 || this.actedAt is not null);
         if (action.Kind == SessionActionKind.Done)
         {
             this.Stop(action.Reason);

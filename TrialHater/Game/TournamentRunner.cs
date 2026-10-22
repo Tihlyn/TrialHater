@@ -1,4 +1,5 @@
 using Dalamud.Game.ClientState.Conditions;
+using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game.Control;
 using FFXIVClientStructs.FFXIV.Component.GUI;
@@ -7,8 +8,9 @@ using GameObject = FFXIVClientStructs.FFXIV.Client.Game.Object.GameObject;
 
 namespace TrialHater.Game;
 
-// Queues for Open Tournaments and finishes them: talks to the Official the player targeted, signs
-// up, commences when the duty pops, and closes the results and rewards. The draft and the matches
+// Queues for Open Tournaments and finishes them: talks to the Official the player targeted (and
+// targets it again when leaving the duty cleared the target), signs up, commences when the duty
+// pops, and closes the results and rewards. The draft and the matches
 // are DraftService's and the auto player's. TournamentPlanner decides; this class reads the windows
 // and performs the one action it names, once per window appearance after the window has settled,
 // retried once (dispatched is not accepted). Framework thread only.
@@ -191,6 +193,7 @@ public sealed unsafe class TournamentRunner
 
     private DispatchResult Perform(TournamentAction action) => action.Kind switch
     {
+        TournamentActionKind.Retarget => this.Retarget(),
         TournamentActionKind.Interact => this.Interact(),
         TournamentActionKind.AdvanceTalk => this.AdvanceTalk(),
         TournamentActionKind.ChooseSignUp => AddonOps.Callback(this.Addon("SelectString"), true, action.Index),
@@ -232,6 +235,28 @@ public sealed unsafe class TournamentRunner
         return new DispatchResult(true, $"interact with {target.Name}");
     }
 
+    private DispatchResult Retarget()
+    {
+        if (this.OfficialInRange() is not { } official)
+            return DispatchResult.Refused("the Official is not in range");
+        this.targets.Target = official;
+        return new DispatchResult(true, $"target {official.Name}");
+    }
+
+    // The nearest targetable object with the Official's base id within interaction range.
+    private IGameObject? OfficialInRange()
+    {
+        if (this.objects.LocalPlayer is not { } player || this.officialBaseId == 0)
+            return null;
+        return this.objects
+            .Where(o => o.BaseId == this.officialBaseId && o.IsTargetable)
+            .Select(o => (Object: o, Distance: System.Numerics.Vector3.Distance(player.Position, o.Position) - o.HitboxRadius))
+            .Where(o => o.Distance <= InteractRange)
+            .OrderBy(o => o.Distance)
+            .Select(o => o.Object)
+            .FirstOrDefault();
+    }
+
     private TournamentSnapshot Read(DateTime now)
     {
         var duty = this.Track("ContentsFinderConfirm", now);
@@ -262,6 +287,8 @@ public sealed unsafe class TournamentRunner
             RewardOpen = reward != null,
             InDuty = this.condition[ConditionFlag.BoundByDuty] || this.condition[ConditionFlag.BoundByDuty56] || this.condition[ConditionFlag.BoundByDuty95],
             CanInteract = canInteract,
+            // Searched only when the next step would be talking to it.
+            OfficialInRange = this.Active && this.Phase == TournamentPhase.Registering && !canInteract && this.OfficialInRange() is not null,
             PlayerOccupied = BusyFlags.Any(f => this.condition[f]),
         };
     }
