@@ -5,6 +5,8 @@ Notable changes are recorded here using the Keep a Changelog format and semantic
 
 ## Unreleased
 
+## [0.2.8] - 2026-10-22
+
 ### Changed
 
 - Farming picks its deck for the rules actually in force. Before every match, rematches included,
