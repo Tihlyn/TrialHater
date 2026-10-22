@@ -9,8 +9,9 @@ using GameObject = FFXIVClientStructs.FFXIV.Client.Game.Object.GameObject;
 namespace TrialHater.Game;
 
 // Queues for Open Tournaments and finishes them: talks to the Official the player targeted (and
-// targets it again when leaving the duty cleared the target), signs up, commences when the duty
-// pops, and closes the results and rewards. The draft and the matches
+// targets it again when leaving the duty cleared the target), signs up while sign-up is open (and
+// waits for the next tournament when it is not), commences when the duty pops, and closes the
+// results and rewards. The draft and the matches
 // are DraftService's and the auto player's. TournamentPlanner decides; this class reads the windows
 // and performs the one action it names, once per window appearance after the window has settled,
 // retried once (dispatched is not accepted). Framework thread only.
@@ -290,6 +291,7 @@ public sealed unsafe class TournamentRunner
             // Searched only when the next step would be talking to it.
             OfficialInRange = this.Active && this.Phase == TournamentPhase.Registering && !canInteract && this.OfficialInRange() is not null,
             PlayerOccupied = BusyFlags.Any(f => this.condition[f]),
+            SignUpOpensAt = OpenTournament.SignUpOpensAt(new DateTimeOffset(now, TimeSpan.Zero)),
         };
     }
 

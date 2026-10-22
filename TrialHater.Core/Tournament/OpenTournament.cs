@@ -12,7 +12,17 @@ public static class OpenTournament
 {
     public static readonly TimeSpan Interval = TimeSpan.FromHours(2);
 
+    // Sign-up closes 30 minutes after a tournament's start (seen in game, 2026-10-22).
+    public static readonly TimeSpan SignUpWindow = TimeSpan.FromMinutes(30);
+
     private const long Offset = 3600;
+
+    // Null while sign-up is open; otherwise when it opens next (the next start).
+    public static DateTimeOffset? SignUpOpensAt(DateTimeOffset now)
+    {
+        var start = LatestStart(now);
+        return now - start < SignUpWindow ? null : start + Interval;
+    }
 
     // The start of the tournament slot `now` falls in (the latest start at or before it).
     public static DateTimeOffset LatestStart(DateTimeOffset now)

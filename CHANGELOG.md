@@ -5,6 +5,23 @@ Notable changes are recorded here using the Keep a Changelog format and semantic
 
 ## Unreleased
 
+### Changed
+
+- Farming picks its deck for the rules actually in force. Before every match, rematches included,
+  the challenge window lists the rules (the NPC's own and the region's); the plugin reads them
+  there instead of guessing from recent matches, which went wrong when a regional rule changed
+  (Tsuzura, 2026-10-22: a Reverse deck played under Ascension and Sudden Death). When the deck was
+  chosen for other rules, the saved decks are ranked again; when the session builds decks, it
+  declines that challenge (a rematch only offers saved decks), builds and writes the deck for the
+  new rules, and challenges again. At most twice per session; after that it ranks the saved decks.
+  The deck builder also uses the rules the NPC's challenge window showed last.
+
+### Fixed
+
+- Open Tournament queue: outside the sign-up window (the first 30 minutes after a tournament
+  starts, every two hours) the queue no longer talks to the Official over and over. It waits, says
+  when sign-up opens, and signs up for the next tournament then.
+
 ## [0.2.7] - 2026-10-22
 
 ### Added

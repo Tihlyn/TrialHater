@@ -25,6 +25,10 @@ public sealed unsafe class Plugin : IDalamudPlugin
     // exploitation to exact ties until the arena says otherwise.
     public const double ChaosModelBand = 0.1;
 
+    // Regional rules change about once a day; more rebuilds than this in one session means the
+    // challenge window reads differently than expected, and the saved decks are ranked instead.
+    private const int MaxSessionRebuilds = 2;
+
     private const string CommandName = "/thater";
     private const string RequestAddon = "TripleTriadRequest";
     private const string ResultAddon = "TripleTriadResult";
@@ -39,10 +43,20 @@ public sealed unsafe class Plugin : IDalamudPlugin
     private readonly IPlayerState playerState;
     private readonly ModelProbe probe;
     private readonly MatchJournal journal;
+
+    // The rules each NPC's challenge window showed last (sheet + regional, Roulette not rolled).
+    private readonly Dictionary<uint, (RuleSet Rules, DateTimeOffset Seen)> challengeRules = new();
+
     private long frameCounter;
     private int placedAtMatchStart;
     private bool writtenChecked = true;
     private int draftGeneration;
+
+    // The rules the session's deck was built or ranked for, and the rules to build it for again once
+    // the challenge that showed them is declined.
+    private RuleSet? sessionDeckRules;
+    private RuleSet? rebuildFor;
+    private int sessionRebuilds;
 
     public Plugin(
         IDalamudPluginInterface pluginInterface,
@@ -268,7 +282,10 @@ public sealed unsafe class Plugin : IDalamudPlugin
         if (this.DeckPrep.Running && !this.Session.Active)
             this.DeckPrep.Cancel();
         this.DeckPrep.Tick(this.DeckWriter, this.DeckChooser);
-        this.Session.Preparing = this.Session.Active ? this.DeckPrep.Pending : null;
+        this.CheckChallengeRules(data);
+        this.Session.Preparing = !this.Session.Active ? null
+            : this.DeckPrep.Pending ?? (this.rebuildFor is { } r ? $"building a deck for [{r}] once the NPC's windows close" : null);
+        this.Session.RebuildDeck = this.rebuildFor is { } rebuild ? $"its rules [{rebuild}] need another deck; declining to build it" : null;
 
         var pickDeck = this.Configuration.SessionPicksDeck;
         this.Session.DeckRow = pickDeck ? this.DeckChooser.Row : -1;
@@ -319,16 +336,19 @@ public sealed unsafe class Plugin : IDalamudPlugin
             return "the bags are full: a dropped card needs a free slot";
         this.SetAutoPlay(true);
         this.Session.Start(npc.TriadId, npc.Name, this.Configuration.SessionMaxMatches, missing);
+        this.sessionDeckRules = null;
+        this.rebuildFor = null;
+        this.sessionRebuilds = 0;
         if (!this.Configuration.SessionPicksDeck)
             return null;
 
-        // Building opens the Gold Saucer window: only from a clean start, before the NPC's menu or
-        // any Triad window is up.
-        var cleanStart = !this.Tracker.InMatch && !new[] { RequestAddon, "TripleTriadSelDeck", ResultAddon, "Talk", "SelectIconString" }.Any(this.IsVisible);
-        if (this.Configuration.SessionBuildsDeck && this.Configuration.DeckWriteSlot >= 0 && cleanStart && !this.DeckWriter.Active)
-            this.PrepareSessionDeck(data, npc);
+        // The first challenge window checks these rules (CheckChallengeRules).
+        var (rules, source) = this.RulesFor(npc);
+        this.Log.Information($"[Deck] session: expecting [{rules}] ({source})");
+        if (this.SessionBuildsDecks && this.ClearForDeckBuilding() && !this.DeckWriter.Active)
+            this.PrepareSessionDeck(data, npc, rules);
         else
-            this.ChooseSessionDeck(data, npc);
+            this.ChooseSessionDeck(data, npc, rules);
         return null;
     }
 
@@ -344,29 +364,82 @@ public sealed unsafe class Plugin : IDalamudPlugin
         return (npc.Name, npc.Rewards.Select(r => (data.Cards.Get(r.CardId)?.Name ?? $"#{r.CardId}", Collection.Collected(r))).ToList());
     }
 
-    // Builds the best deck against the session NPC first (SessionDeckPrep), then plays it.
-    private void PrepareSessionDeck(GameData data, NpcDeck npc)
+    // Builds the best deck against the session NPC under `rules` first (SessionDeckPrep), then plays it.
+    private void PrepareSessionDeck(GameData data, NpcDeck npc, RuleSet rules)
     {
         var owned = Collection.Owned(data.Cards);
         if (owned.Count < 5)
         {
             this.Log.Information("[Deck] session: could not read the card collection; picking among the saved decks");
-            this.ChooseSessionDeck(data, npc);
+            this.ChooseSessionDeck(data, npc, rules);
             return;
         }
 
-        var history = this.journal.RulesHistory(npc.TriadId);
-        var (rules, _) = DeckRules.ExpectedRules(npc, history);
-        this.DeckPrep.Start(npc, rules, history.Count == 0, owned, Collection.SavedDecks(data.Cards), data.Cards, this.Character.Cache,
-            this.Configuration.DeckWriteSlot, () => this.ChooseSessionDeck(data, npc));
+        this.sessionDeckRules = rules;
+        this.DeckPrep.Start(npc, rules, owned, Collection.SavedDecks(data.Cards), data.Cards, this.Character.Cache,
+            this.Configuration.DeckWriteSlot, () => this.ChooseSessionDeck(data, npc, rules));
     }
 
-    // Ranks the saved decks against the session NPC under the rules its recorded matches had.
-    private void ChooseSessionDeck(GameData data, NpcDeck npc)
+    // Ranks the saved decks against the session NPC under `rules`.
+    private void ChooseSessionDeck(GameData data, NpcDeck npc, RuleSet rules)
     {
-        var history = this.journal.RulesHistory(npc.TriadId);
-        var (rules, _) = DeckRules.ExpectedRules(npc, history);
-        this.DeckChooser.Start(npc, rules, history.Count == 0, Collection.SavedDecks(data.Cards), data.Cards, this.Character.Cache);
+        this.sessionDeckRules = rules;
+        this.DeckChooser.Start(npc, rules, Collection.SavedDecks(data.Cards), data.Cards, this.Character.Cache);
+    }
+
+    // The rules a match against `npc` will have (Roulette not rolled yet): those its challenge
+    // window showed last, else the ones its recorded matches suggest.
+    private (RuleSet Rules, string Source) RulesFor(NpcDeck npc)
+        => this.challengeRules.TryGetValue(npc.TriadId, out var shown)
+            ? (shown.Rules, $"shown by its challenge window at {shown.Seen.ToLocalTime():HH:mm}")
+            : DeckRules.ExpectedRules(npc, this.journal.RulesHistory(npc.TriadId));
+
+    private bool SessionBuildsDecks => this.Configuration.SessionBuildsDeck && this.Configuration.DeckWriteSlot >= 0;
+
+    // Building a deck opens the Gold Saucer window: only while no match, NPC menu or Triad window is up.
+    private bool ClearForDeckBuilding()
+        => !this.Tracker.InMatch && !new[] { RequestAddon, "TripleTriadSelDeck", ResultAddon, "Talk", "SelectIconString" }.Any(this.IsVisible);
+
+    // The challenge window shows the rules in force before every match, rematches included. A
+    // session deck chosen for other rules is chosen again for these: the saved decks are ranked
+    // again before the deck window, or, when the session builds decks, the challenge is declined and
+    // the deck built and written first, since a rematch only offers the saved decks.
+    private void CheckChallengeRules(GameData data)
+    {
+        if (!this.Session.Active)
+            this.rebuildFor = null;
+        if (this.Tracker.NpcTriadId != 0 && SessionRunner.RequestRules(this.Addon(RequestAddon)) is { } shown)
+        {
+            var triad = this.Tracker.NpcTriadId;
+            if (!this.challengeRules.TryGetValue(triad, out var last) || last.Rules != shown)
+                this.Log.Information($"[Npc] {data.Npcs.Get(triad)?.Name ?? "?"}: the challenge window shows [{shown}]");
+            this.challengeRules[triad] = (shown, DateTimeOffset.UtcNow);
+            if (this.Session.Active && triad == this.Session.NpcTriadId && this.rebuildFor is null
+                && this.sessionDeckRules is { } chosen && DeckRules.ForEvaluation(chosen) != DeckRules.ForEvaluation(shown)
+                && data.Npcs.Get(triad) is { } npc)
+            {
+                var rebuild = this.SessionBuildsDecks && this.sessionRebuilds < MaxSessionRebuilds;
+                this.Log.Information($"[Deck] session: the deck was chosen for [{chosen}], the challenge shows [{shown}]"
+                                     + (rebuild ? "; declining it to build a deck for these rules" : "; ranking the saved decks again")
+                                     + (this.SessionBuildsDecks && !rebuild ? $" (already rebuilt {this.sessionRebuilds} times this session)" : string.Empty));
+                if (rebuild)
+                {
+                    this.rebuildFor = shown;
+                    this.sessionRebuilds++;
+                }
+                else
+                {
+                    this.ChooseSessionDeck(data, npc, shown);
+                }
+            }
+        }
+
+        if (this.rebuildFor is { } rules && !this.DeckWriter.Active && this.ClearForDeckBuilding()
+            && data.Npcs.Get(this.Session.NpcTriadId) is { } farmed)
+        {
+            this.rebuildFor = null;
+            this.PrepareSessionDeck(data, farmed, rules);
+        }
     }
 
     // Queues for Open Tournaments with the targeted Official; the draft and matches run on auto.
@@ -383,7 +456,8 @@ public sealed unsafe class Plugin : IDalamudPlugin
     }
 
     // Searches the best decks from the collection against the NPC we are facing, under the rules
-    // its recorded matches had (sheet rules + regional ones), and scores the saved decks too.
+    // its challenge window showed last or its recorded matches had (sheet rules + regional ones),
+    // and scores the saved decks too.
     public string? StartDeckSearch()
     {
         if (this.Data is not { } data)
@@ -394,7 +468,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
         if (owned.Count < 5)
             return "could not read the card collection";
         this.journal.WriteOwned(owned);
-        var (rules, source) = DeckRules.ExpectedRules(npc, this.journal.RulesHistory(npc.TriadId));
+        var (rules, source) = this.RulesFor(npc);
         this.Decks.Start(npc, rules, source, owned, Collection.SavedDecks(data.Cards), data.Cards, this.Character.Cache);
         this.Log.Information($"[Deck] searching decks against {npc.Name} [{rules}] ({source}), {owned.Count} owned cards");
         return null;
@@ -489,11 +563,6 @@ public sealed unsafe class Plugin : IDalamudPlugin
     {
         this.journal.MatchEnded(this.Tracker, this.CurrentNpc, blueCards, this.AutoPlayer.Placed - this.placedAtMatchStart);
         this.Session.MatchEnded(blueCards);
-
-        // The first recorded match shows the NPC's regional rules: rank the saved decks again.
-        if (this.Session.Active && this.Configuration.SessionPicksDeck && this.DeckChooser.SheetRulesOnly
-            && this.Data is { } data && data.Npcs.Get(this.Session.NpcTriadId) is { } npc)
-            this.ChooseSessionDeck(data, npc);
         this.placedAtMatchStart = this.AutoPlayer.Placed;
     }
 

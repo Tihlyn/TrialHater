@@ -53,6 +53,15 @@ public class TournamentTests
     }
 
     [Fact]
+    public void SignUpIsOpenForTheFirstHalfHour()
+    {
+        Assert.Null(OpenTournament.SignUpOpensAt(new DateTimeOffset(2026, 10, 19, 23, 0, 0, TimeSpan.Zero)));
+        Assert.Null(OpenTournament.SignUpOpensAt(new DateTimeOffset(2026, 10, 19, 23, 29, 59, TimeSpan.Zero)));
+        Assert.Equal(new DateTimeOffset(2026, 10, 20, 1, 0, 0, TimeSpan.Zero), OpenTournament.SignUpOpensAt(new DateTimeOffset(2026, 10, 19, 23, 30, 0, TimeSpan.Zero)));
+        Assert.Equal(new DateTimeOffset(2026, 10, 19, 23, 0, 0, TimeSpan.Zero), OpenTournament.SignUpOpensAt(new DateTimeOffset(2026, 10, 19, 22, 59, 59, TimeSpan.Zero)));
+    }
+
+    [Fact]
     public void OpponentDecksMergeWithinATournamentAndResetAfterIt()
     {
         var decks = new TournamentDecks();

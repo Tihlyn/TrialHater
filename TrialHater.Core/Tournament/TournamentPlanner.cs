@@ -35,6 +35,9 @@ public sealed record TournamentSnapshot
     public bool OfficialInRange { get; init; }
 
     public bool PlayerOccupied { get; init; }
+
+    // When sign-up opens next, null while it is open (OpenTournament.SignUpOpensAt).
+    public DateTimeOffset? SignUpOpensAt { get; init; }
 }
 
 public enum TournamentPhase
@@ -110,6 +113,9 @@ public static class TournamentPlanner
             return TournamentAction.Wait("still in the tournament duty");
         if (s.PlayerOccupied)
             return TournamentAction.Wait("the game has the player occupied");
+        // Outside the sign-up window the Official only repeats that it is closed.
+        if (s.SignUpOpensAt is { } opens)
+            return TournamentAction.Wait($"sign-up is closed; it opens at {opens.ToLocalTime():HH:mm}");
         if (s.CanInteract)
             return new TournamentAction(TournamentActionKind.Interact, "talk to the Official");
         return s.OfficialInRange

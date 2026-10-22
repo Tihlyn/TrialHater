@@ -3,6 +3,7 @@ using Dalamud.Plugin.Services;
 using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.Game.Control;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using TrialHater.Core.Rules;
 using TrialHater.Core.Session;
 using GameObject = FFXIVClientStructs.FFXIV.Client.Game.Object.GameObject;
 
@@ -102,6 +103,10 @@ public sealed unsafe class SessionRunner
 
     // Set by the plugin each frame while the session's deck is being built.
     public string? Preparing { get; set; }
+
+    // Set by the plugin each frame: why the challenge on screen must be declined (its rules need
+    // another deck, built before the next challenge).
+    public string? RebuildDeck { get; set; }
 
     public string LastAction { get; private set; } = string.Empty;
 
@@ -306,6 +311,7 @@ public sealed unsafe class SessionRunner
             Preparing = this.Preparing,
             RequestOpen = request != null && Actionable(request, RequestChallengeNode),
             RequestKey = this.Run("TripleTriadRequest", request != null).ToString(),
+            RebuildDeck = this.RebuildDeck,
             // Only the session NPC's lines (Talk[1] is the speaker; some Triad lines leave it empty).
             TalkOpen = talk != null && (StringValue(talk, 1) is not { Length: > 0 } speaker
                                         || speaker.Equals(this.NpcName, StringComparison.OrdinalIgnoreCase)),
@@ -372,6 +378,30 @@ public sealed unsafe class SessionRunner
         }
 
         return -1;
+    }
+
+    // The challenge window (TripleTriadRequest) lists the rules in force before every match,
+    // rematches included, as sheet ids in [102..105]: the regional rules first, then the NPC's own,
+    // empty slots 0 or unset; [106..109] are their descriptions and [12..27] the rule names by id.
+    // Momodi 2026-10-22: 8, 14, 3, 0 = Order, Swap (Thanalan) + Three Open. Null when the window is
+    // not up or the slots do not hold that.
+    public static RuleSet? RequestRules(AtkUnitBase* request)
+    {
+        const int First = 102;
+        if (request == null || !request->IsVisible || !request->IsReady || request->AtkValuesCount < First + 4)
+            return null;
+        var rules = RuleSet.Empty;
+        for (var i = First; i < First + 4; i++)
+        {
+            ref var v = ref request->AtkValues[i];
+            if (v.Type is AtkValueType.Undefined or AtkValueType.Null)
+                continue;
+            if (v.Type is not (AtkValueType.Int or AtkValueType.UInt) || v.Int is < 0 or > (int)TriadRule.Draft)
+                return null;
+            rules = rules.With((TriadRule)v.Int);
+        }
+
+        return rules;
     }
 
     private static int IntValue(AtkUnitBase* addon, int index)

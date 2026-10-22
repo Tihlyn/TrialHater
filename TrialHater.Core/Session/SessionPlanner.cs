@@ -31,6 +31,10 @@ public sealed record SessionSnapshot
 
     public string RequestKey { get; init; } = string.Empty;
 
+    // Why this challenge must be declined: its rules are not the ones the session's deck was built
+    // for, and a rematch only offers the saved decks, so the deck is built again first.
+    public string? RebuildDeck { get; init; }
+
     public bool TalkOpen { get; init; }
 
     public string TalkKey { get; init; } = string.Empty;
@@ -111,8 +115,10 @@ public static class SessionPlanner
         }
         if (s.RequestOpen)
         {
-            return stopping
-                ? new SessionAction(SessionActionKind.DeclineRequest, "TripleTriadRequest", s.RequestKey, "goal reached")
+            if (stopping)
+                return new SessionAction(SessionActionKind.DeclineRequest, "TripleTriadRequest", s.RequestKey, "goal reached");
+            return s.RebuildDeck is { } why
+                ? new SessionAction(SessionActionKind.DeclineRequest, "TripleTriadRequest", s.RequestKey, why)
                 : new SessionAction(SessionActionKind.Challenge, "TripleTriadRequest", s.RequestKey, "challenge");
         }
 

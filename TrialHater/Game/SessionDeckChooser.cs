@@ -29,10 +29,6 @@ public sealed class SessionDeckChooser : IDisposable
 
     public string Summary { get; private set; } = string.Empty;
 
-    // Whether the ranking used the sheet rules only (no match against the NPC recorded yet), so a
-    // first match's regional rules can change the choice.
-    public bool SheetRulesOnly { get; private set; }
-
     // Non-null while the session should wait at the deck window.
     public string? Pending
     {
@@ -49,12 +45,11 @@ public sealed class SessionDeckChooser : IDisposable
         }
     }
 
-    public void Start(NpcDeck npc, RuleSet rules, bool sheetRulesOnly, IReadOnlyList<SavedDeck> saved, CardCatalog catalog, DeckCache? cache)
+    public void Start(NpcDeck npc, RuleSet rules, IReadOnlyList<SavedDeck> saved, CardCatalog catalog, DeckCache? cache)
     {
         this.Cancel();
         this.Row = -1;
         this.Cards = [];
-        this.SheetRulesOnly = sheetRulesOnly;
         if (saved.Count == 0)
         {
             this.Summary = "no complete saved deck; using the default deck";
@@ -112,10 +107,9 @@ public sealed class SessionDeckChooser : IDisposable
     }
 
     // Take a deck decided elsewhere (the session's deck building), without ranking.
-    public void Use(SavedDeck deck, string why, bool sheetRulesOnly)
+    public void Use(SavedDeck deck, string why)
     {
         this.Cancel();
-        this.SheetRulesOnly = sheetRulesOnly;
         this.Choose(deck, why);
     }
 

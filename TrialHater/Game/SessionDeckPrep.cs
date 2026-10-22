@@ -24,7 +24,6 @@ public sealed class SessionDeckPrep : IDisposable
     private string npcName = string.Empty;
     private string progress = string.Empty;
     private Action? fallback;
-    private bool sheetRulesOnly;
 
     public SessionDeckPrep(Action<string> log)
     {
@@ -41,12 +40,11 @@ public sealed class SessionDeckPrep : IDisposable
         : null;
 
     // `fallback` ranks the saved decks the usual way, if building fails.
-    public void Start(NpcDeck npc, RuleSet rules, bool sheetRulesOnly, IReadOnlyCollection<CardInfo> owned, IReadOnlyList<SavedDeck> savedDecks,
+    public void Start(NpcDeck npc, RuleSet rules, IReadOnlyCollection<CardInfo> owned, IReadOnlyList<SavedDeck> savedDecks,
         CardCatalog catalog, DeckCache? cache, int writeSlot, Action fallback)
     {
         this.Cancel();
         this.fallback = fallback;
-        this.sheetRulesOnly = sheetRulesOnly;
         var source = new CancellationTokenSource();
         this.cancel = source;
         this.saved = savedDecks;
@@ -88,7 +86,7 @@ public sealed class SessionDeckPrep : IDisposable
             if (writer.Written is { } written && written.Slot == this.slot && written.Cards.SequenceEqual(deck.Cards.Select(c => c.Id)))
             {
                 this.Summary = $"wrote Deck {this.slot + 1} ({deck.Expected:+0.00;-0.00;0.00}) and plays it";
-                chooser.Use(new SavedDeck(this.slot, $"Deck {this.slot + 1}", deck.Cards), $"Deck {this.slot + 1}, just built ({deck.Expected:+0.00;-0.00;0.00})", this.sheetRulesOnly);
+                chooser.Use(new SavedDeck(this.slot, $"Deck {this.slot + 1}", deck.Cards), $"Deck {this.slot + 1}, just built ({deck.Expected:+0.00;-0.00;0.00})");
             }
             else
             {
@@ -125,7 +123,7 @@ public sealed class SessionDeckPrep : IDisposable
             this.Summary = alreadySaved is not null
                 ? $"the best deck is already saved as {deck.Name}"
                 : $"no new deck clearly better than {deck.Name} (best found {best.Expected:+0.00;-0.00;0.00} vs {score.Expected:+0.00;-0.00;0.00})";
-            chooser.Use(deck, $"{deck.Name} ({score.Expected:+0.00;-0.00;0.00}), {this.Summary}", this.sheetRulesOnly);
+            chooser.Use(deck, $"{deck.Name} ({score.Expected:+0.00;-0.00;0.00}), {this.Summary}");
             return;
         }
 

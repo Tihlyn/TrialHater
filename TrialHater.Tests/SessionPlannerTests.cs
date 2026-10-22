@@ -41,6 +41,19 @@ public class SessionPlannerTests
         Assert.Equal(SessionActionKind.Rematch, Next(new SessionSnapshot { ResultOpen = true, Preparing = "building" }, done: 1));
     }
 
+    // 2026-10-22: Tsuzura was farmed with a deck built for last week's regional rule. A challenge
+    // whose rules call for another deck is declined; the deck is built while nothing is on screen.
+    [Fact]
+    public void DeclinesAChallengeWhoseRulesNeedAnotherDeck()
+    {
+        var declined = SessionPlanner.Next(new SessionSnapshot { RequestOpen = true, RebuildDeck = "rules changed" }, Three, 1, sessionStarted: true);
+        Assert.Equal(SessionActionKind.DeclineRequest, declined.Kind);
+        Assert.Equal("rules changed", declined.Reason);
+        Assert.Equal(SessionActionKind.AdvanceTalk, Next(new SessionSnapshot { TalkOpen = true, Preparing = "rebuilding" }, done: 1));
+        Assert.Equal(SessionActionKind.Wait, Next(new SessionSnapshot { CanInteract = true, Preparing = "rebuilding" }, done: 1));
+        Assert.Equal(SessionActionKind.Challenge, Next(new SessionSnapshot { RequestOpen = true }, done: 1));
+    }
+
     [Fact]
     public void QuitsWhenTheGoalIsReached()
     {

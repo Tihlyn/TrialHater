@@ -55,4 +55,17 @@ public class TournamentPlannerTests
         Assert.Equal(TournamentActionKind.Wait, Next(new TournamentSnapshot { OfficialInRange = true }, TournamentPhase.Queued));
         Assert.Equal(TournamentActionKind.Wait, Next(new TournamentSnapshot()));
     }
+
+    // 2026-10-22: past the sign-up window the queue talked to the Official over and over.
+    [Fact]
+    public void WaitsForTheSignUpWindow()
+    {
+        var opens = new DateTimeOffset(2026, 10, 22, 21, 0, 0, TimeSpan.Zero);
+        Assert.Equal(TournamentActionKind.Wait, Next(new TournamentSnapshot { CanInteract = true, SignUpOpensAt = opens }));
+        Assert.Equal(TournamentActionKind.Wait, Next(new TournamentSnapshot { OfficialInRange = true, SignUpOpensAt = opens }));
+        // What is already on screen still finishes; the rewards close whatever the time.
+        Assert.Equal(TournamentActionKind.AdvanceTalk, Next(new TournamentSnapshot { TalkOpen = true, SignUpOpensAt = opens }));
+        Assert.Equal(TournamentActionKind.CloseReward, Next(new TournamentSnapshot { RewardOpen = true, SignUpOpensAt = opens }, TournamentPhase.Playing));
+        Assert.Equal(TournamentActionKind.Commence, Next(new TournamentSnapshot { DutyReadyOpen = true, DutyIsTournament = true, SignUpOpensAt = opens }, TournamentPhase.Queued));
+    }
 }
