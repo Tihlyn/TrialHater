@@ -3,13 +3,17 @@ using Arena;
 using TrialHater.Core.Cards;
 using TrialHater.Core.Policy;
 using TrialHater.Core.Rules;
+using TrialHater.Core.Search;
 
 // Arena scenarios [probe=model_probe.jsonl] [out=scenarios.json] [data=research/data]
 //   Recorded NPC matchups (NPC, rules, our dealt hand) from the plugin's probe file.
 // Arena run [scenarios=scenarios.json] [games=20] [policies=baseline,surewin] [opponents=greedy:0.1]
-//           [shard=0/1] [threads=N] [inner=1] [live=14] [exploit=3] [out=results.jsonl] [data=research/data] [limit=0] [filter=text]
+//           [shard=0/1] [threads=N] [inner=1] [live=14] [exploit=3] [cache=0] [out=results.jsonl] [data=research/data] [limit=0] [filter=text]
 //   Plays games x scenarios x policies x opponents; each game seed is shared by every policy and
 //   opponent. Results already in `out` are skipped, so a stopped run resumes.
+// Arena bench [scenarios=scenarios.json] [deals=3] [threads=14] [filter=text] [verify=0]
+//   Times our opening decision (we start; Chaos draws slot = deal % 5) as the plugin makes it;
+//   verify=1 also checks every move's value against fresh single-move solves.
 // Arena report results.jsonl [more.jsonl ...]
 //   Win/draw/loss per policy and opponent, and the paired comparison between policies.
 var command = args.Length > 0 ? args[0] : "help";
@@ -33,6 +37,9 @@ switch (command)
 
     case "run":
         return Run();
+
+    case "bench":
+        return Bench();
 
     case "report":
         Report.Print(args.Skip(1).Where(a => !a.Contains('=')).ToList());
@@ -60,6 +67,8 @@ int Run()
     var shard = Opt("shard", "0/1").Split('/').Select(int.Parse).ToArray();
     var threads = int.Parse(Opt("threads", Math.Max(1, Environment.ProcessorCount - 2).ToString()));
     var outPath = Opt("out", "results.jsonl");
+    // cache=1: one solve cache per scenario, shared by its games, as when farming one NPC.
+    var caches = Opt("cache", "0") == "1" ? new System.Collections.Concurrent.ConcurrentDictionary<string, SolveCache>() : null;
 
     var done = new HashSet<string>();
     if (File.Exists(outPath))
@@ -89,7 +98,10 @@ int Run()
         GameResult result;
         try
         {
-            result = Game.Play(w.Scenario, npc, catalog, Policy(w.Policy), w.Opponent, seed);
+            var policy = Policy(w.Policy);
+            if (caches is not null)
+                policy = policy with { Cache = caches.GetOrAdd(w.Scenario.Key, _ => new SolveCache()) };
+            result = Game.Play(w.Scenario, npc, catalog, policy, w.Opponent, seed);
         }
         catch (Exception e)
         {
@@ -111,6 +123,59 @@ int Run()
     return 0;
 }
 
+int Bench()
+{
+    var data = options.TryGetValue("data", out var given) ? given : DataDir();
+    var catalog = CardCatalog.FromCsv(Path.Combine(data, "cards.csv"));
+    var npcs = NpcCatalog.FromCsv(Path.Combine(data, "npc-decks.csv"));
+    var scenarios = Scenarios.Load(Opt("scenarios", "scenarios.json"));
+    if (options.TryGetValue("filter", out var filter))
+        scenarios = scenarios.Where(s => s.Rules.Contains(filter, StringComparison.OrdinalIgnoreCase) || s.Name.Contains(filter, StringComparison.OrdinalIgnoreCase)).ToList();
+    var deals = int.Parse(Opt("deals", "3"));
+    var threads = int.Parse(Opt("threads", "14"));
+    var verify = Opt("verify", "0") == "1";
+    var policy = new PolicyOptions { MaxParallelism = threads };
+    double total = 0;
+    var wrong = 0;
+    Console.WriteLine($"{"scenario",-44} {"deal",4} {"hands",5} {"seconds",8}{(verify ? "  values" : string.Empty)}");
+    foreach (var scenario in scenarios)
+    {
+        var npc = npcs.Get(scenario.Npc)!;
+        for (var d = 0; d < deals; d++)
+        {
+            var view = Game.OpeningView(scenario, npc, catalog, Game.Mix(StableHash(scenario.Key), d), d % 5);
+            var (decision, seconds) = Timed(view, npc, catalog, policy);
+            total += seconds;
+            var check = string.Empty;
+            if (verify)
+            {
+                // Ground truth: every move under every hypothesis on its own fresh solver.
+                var hypotheses = TrialHater.Core.Belief.HandBelief.Build(view, npc, catalog).Hypotheses;
+                var positions = hypotheses.Select(h => view.ToPosition(h.RedHand)).ToArray();
+                var legal = positions[0].LegalMoves().ToList();
+                var truth = new System.Collections.Concurrent.ConcurrentDictionary<(int, TrialHater.Core.Engine.Move), double>();
+                Parallel.ForEach(from h in Enumerable.Range(0, positions.Length) from m in legal select (h, m), new ParallelOptions { MaxDegreeOfParallelism = threads },
+                    x => truth[x] = new Solver(positions[x.h], 20).ScoreMoves([x.m])[0].Value);
+                var off = legal.Count(m => Math.Abs(decision.Moves.Single(x => x.Move == m).ExpectedValue - Enumerable.Range(0, positions.Length).Sum(h => hypotheses[h].Weight * truth[(h, m)])) > 1e-12);
+                wrong += off;
+                check = off == 0 ? "  exact" : $"  {off} of {legal.Count} WRONG";
+            }
+
+            Console.WriteLine($"{$"{scenario.Name} [{scenario.Rules}]",-44} {d,4} {decision.Hypotheses,5} {seconds,8:0.00}{check}");
+        }
+    }
+
+    Console.WriteLine($"total {total:0.0} s{(verify ? $", {wrong} move value(s) differ from fresh solves" : string.Empty)}");
+    return wrong == 0 ? 0 : 1;
+}
+
+static (Decision Decision, double Seconds) Timed(TrialHater.Core.Match.MatchView view, NpcDeck npc, CardCatalog catalog, PolicyOptions policy)
+{
+    var clock = System.Diagnostics.Stopwatch.StartNew();
+    var decision = MovePolicy.Decide(view, npc, catalog, policy);
+    return (decision, clock.Elapsed.TotalSeconds);
+}
+
 // The policies under test. Each game runs on `inner` threads; the arena parallelises across games.
 PolicyOptions Policy(string name)
 {
@@ -124,11 +189,23 @@ PolicyOptions Policy(string name)
     return name switch
     {
         "baseline" => baseOptions with { SureWinBudget = TimeSpan.Zero },
-        "surewin" => baseOptions,
+        "surewin" => baseOptions with { SureDrawCheck = false },
+        // Sure wins, else sure draws (moves that cannot lose whatever the hidden cards are).
+        "guarantee" => baseOptions,
         // Sure-win, and exploitation against the model fitted to logged NPC moves.
-        "surewin-fit" => baseOptions with { Model = new SoftmaxGain(2) },
+        "surewin-fit" => baseOptions with { SureDrawCheck = false, Model = new SoftmaxGain(2) },
+        // band:E[:model]: exploitation may pick moves up to E below the best minimax value, against
+        // the fitted model (softmax:2) unless another is named (greedy:eps).
+        _ when name.StartsWith("band:", StringComparison.Ordinal) => Band(name),
         _ => throw new ArgumentException($"unknown policy '{name}'"),
     };
+}
+
+PolicyOptions Band(string name)
+{
+    var parts = name.Split(':');
+    var model = parts.Length > 2 && parts[2] == "greedy" ? (IOpponentModel)new GreedyOpponent(double.Parse(parts[3], System.Globalization.CultureInfo.InvariantCulture)) : new SoftmaxGain(2);
+    return Policy("surewin") with { ModelBand = double.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture), Model = model };
 }
 
 static int StableHash(string text)

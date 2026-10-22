@@ -21,33 +21,7 @@ internal static class Game
         var deal = new Random(seed);
         var draws = new Random(Mix(seed, 1));
         var npcRandom = new Random(Mix(seed, 2));
-
-        // The NPC's hand: every fixed card plus random variable picks, in a random slot order.
-        var redCards = npc.Fixed.Select(id => catalog.Get(id)!.Stats)
-            .Concat(npc.Variable.OrderBy(_ => deal.Next()).Take(npc.VariablePicks).Select(id => catalog.Get(id)!.Stats))
-            .OrderBy(_ => deal.Next()).ToArray();
-        var blueCards = scenario.HandStats;
-        var blueFirst = deal.Next(2) == 0;
-
-        // What we can see of the NPC's hand.
-        var shown = new bool[5];
-        if (rules.Has(TriadRule.AllOpen))
-            Array.Fill(shown, true);
-        else if (rules.Has(TriadRule.ThreeOpen))
-            foreach (var slot in Enumerable.Range(0, 5).OrderBy(_ => deal.Next()).Take(3))
-                shown[slot] = true;
-
-        // Swap: one card each way before the first turn; ours shows face up in the NPC's hand.
-        CardStats[] foreign = [], lost = [];
-        if (rules.Has(TriadRule.Swap))
-        {
-            var ours = deal.Next(5);
-            var theirs = deal.Next(5);
-            (blueCards[ours], redCards[theirs]) = (redCards[theirs], blueCards[ours]);
-            foreign = [redCards[theirs]];
-            lost = [blueCards[ours]];
-            shown[theirs] = true;
-        }
+        var (blueCards, redCards, blueFirst, shown, foreign, lost) = Deal(scenario, npc, catalog, deal);
 
         var position = new Position(rules, new BoardCard?[9], [.. blueCards.Select(c => (CardStats?)c)], [.. redCards.Select(c => (CardStats?)c)], blueFirst ? Side.Blue : Side.Red);
         var engine = new Engine(position);
@@ -83,7 +57,7 @@ internal static class Game
                 decisions++;
                 totalSeconds += seconds;
                 maxSeconds = Math.Max(maxSeconds, seconds);
-                if (decision.Reason.Contains("sure win:", StringComparison.Ordinal))
+                if (decision.Reason.Contains("sure win:", StringComparison.Ordinal) || decision.Reason.Contains("sure draw:", StringComparison.Ordinal))
                     narrowed++;
                 if (decision.Reason.Contains("FALLBACK", StringComparison.Ordinal))
                     fallbacks++;
@@ -111,6 +85,59 @@ internal static class Game
         }
 
         return new GameResult(engine.BlueOutcome, engine.BlueScore, blueFirst, decisions, maxSeconds, totalSeconds, narrowed, fallbacks, exploitOut, null);
+    }
+
+    // The deal of one game: both hands (after Swap), who starts, what we see of the NPC's hand.
+    private static (CardStats[] Blue, CardStats[] Red, bool BlueFirst, bool[] Shown, CardStats[] Foreign, CardStats[] Lost) Deal(
+        Scenario scenario, NpcDeck npc, CardCatalog catalog, Random deal)
+    {
+        var rules = scenario.RuleSet;
+
+        // The NPC's hand: every fixed card plus random variable picks, in a random slot order.
+        var redCards = npc.Fixed.Select(id => catalog.Get(id)!.Stats)
+            .Concat(npc.Variable.OrderBy(_ => deal.Next()).Take(npc.VariablePicks).Select(id => catalog.Get(id)!.Stats))
+            .OrderBy(_ => deal.Next()).ToArray();
+        var blueCards = scenario.HandStats;
+        var blueFirst = deal.Next(2) == 0;
+
+        // What we can see of the NPC's hand.
+        var shown = new bool[5];
+        if (rules.Has(TriadRule.AllOpen))
+            Array.Fill(shown, true);
+        else if (rules.Has(TriadRule.ThreeOpen))
+            foreach (var slot in Enumerable.Range(0, 5).OrderBy(_ => deal.Next()).Take(3))
+                shown[slot] = true;
+
+        // Swap: one card each way before the first turn; ours shows face up in the NPC's hand.
+        CardStats[] foreign = [], lost = [];
+        if (rules.Has(TriadRule.Swap))
+        {
+            var ours = deal.Next(5);
+            var theirs = deal.Next(5);
+            (blueCards[ours], redCards[theirs]) = (redCards[theirs], blueCards[ours]);
+            foreign = [redCards[theirs]];
+            lost = [blueCards[ours]];
+            shown[theirs] = true;
+        }
+
+        return (blueCards, redCards, blueFirst, shown, foreign, lost);
+    }
+
+    // Our first decision of a game's deal when we open (bench): the empty board, our hand, the NPC's
+    // hand as we would see it, our forced slot under Chaos or Order.
+    public static MatchView OpeningView(Scenario scenario, NpcDeck npc, CardCatalog catalog, int seed, int chaosSlot)
+    {
+        var rules = scenario.RuleSet;
+        var (blueCards, redCards, _, shown, foreign, lost) = Deal(scenario, npc, catalog, new Random(seed));
+        var forced = rules.Has(TriadRule.Chaos) ? chaosSlot : rules.Has(TriadRule.Order) ? 0 : -1;
+        return new MatchView(rules, new BoardCard?[9],
+            [.. blueCards.Select(HandSlot.Of)],
+            [.. Enumerable.Range(0, 5).Select(s => shown[s] ? HandSlot.Of(redCards[s]) : HandSlot.Hidden)],
+            Side.Blue, forced, npc.TriadId)
+        {
+            RedForeign = foreign,
+            RedLost = lost,
+        };
     }
 
     public static int Mix(int a, int b)
