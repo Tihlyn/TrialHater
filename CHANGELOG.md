@@ -5,6 +5,8 @@ Notable changes are recorded here using the Keep a Changelog format and semantic
 
 ## Unreleased
 
+## [0.2.7] - 2026-10-22
+
 ### Added
 
 - Farming: "Farm until every card drops" farms the targeted NPC until every card it can drop is
