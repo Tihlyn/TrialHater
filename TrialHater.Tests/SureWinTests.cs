@@ -69,6 +69,13 @@ public class SureWinTests
     {
         // The next decision: Godbert at 6, one card hidden. Every move loses to one of the three.
         var npc = Npcs.Get(PridefulStag)!;
+        var decision = MovePolicy.Decide(AfterGodbert(), npc, Catalog, new PolicyOptions());
+        Assert.Equal(new Move(3, 0), decision.Move);
+        Assert.DoesNotContain("sure win", decision.Reason);
+    }
+
+    private static MatchView AfterGodbert()
+    {
         var vanu = Card(82);
         var dragon = Card(26);
         var lamb = Card(158);
@@ -76,14 +83,43 @@ public class SureWinTests
         var board = Board(null, new BoardCard(vanu, Side.Blue), B("5468"), null, B("7A91"), new BoardCard(dragon, Side.Blue), new BoardCard(godbert, Side.Red), new BoardCard(lamb, Side.Red), B("8744"));
         HandSlot[] blue = [HandSlot.Empty, HandSlot.Of(C("7528")), HandSlot.Empty, HandSlot.Of(C("7479")), HandSlot.Empty];
         HandSlot[] red = [HandSlot.Empty, HandSlot.Empty, HandSlot.Empty, HandSlot.Empty, HandSlot.Hidden];
-        var view = new MatchView(RuleSet.Of(TriadRule.Plus), board, blue, red, Side.Blue, NpcTriadId: PridefulStag)
+        return new MatchView(RuleSet.Of(TriadRule.Plus), board, blue, red, Side.Blue, NpcTriadId: PridefulStag)
         {
             RedPlayed = [vanu, dragon, lamb, godbert],
         };
+    }
 
-        var decision = MovePolicy.Decide(view, npc, Catalog, new PolicyOptions());
-        Assert.Equal(new Move(3, 0), decision.Move);
-        Assert.DoesNotContain("sure win", decision.Reason);
+    // With one hand the search is the exact game: its win and no-loss sets are the solver's.
+    [Fact]
+    public void ThresholdsMatchTheSolverOnAKnownHand()
+    {
+        var npc = Npcs.Get(PridefulStag)!;
+        foreach (var position in Positions(AfterLostLamb(), npc).Concat(Positions(AfterGodbert(), npc)))
+        {
+            var values = new Solver(position).ScoreRootMoves();
+            var legal = position.LegalMoves().ToList();
+            foreach (var atLeast in new[] { 1, 0 })
+            {
+                var exact = values.Where(v => v.Value >= atLeast - 1e-9).Select(v => v.Move).ToHashSet();
+                Assert.Equal(exact, SureWin.Moves([position], legal, 2, CancellationToken.None, atLeast));
+            }
+        }
+    }
+
+    [Fact]
+    public void SureWinsAreSureDrawsAreNonLossesInEveryHand()
+    {
+        var npc = Npcs.Get(PridefulStag)!;
+        foreach (var view in new[] { AfterLostLamb(), AfterGodbert() })
+        {
+            var positions = Positions(view, npc);
+            var legal = positions[0].LegalMoves().ToList();
+            var wins = SureWin.Moves(positions, legal, 2, CancellationToken.None);
+            var draws = SureWin.Moves(positions, legal, 2, CancellationToken.None, atLeast: 0);
+            var perHand = legal.Where(m => positions.All(p => new Solver(p).ScoreMoves([m])[0].Value >= 0)).ToHashSet();
+            Assert.Subset(draws, wins);
+            Assert.Subset(perHand, draws);
+        }
     }
 
     [Fact]

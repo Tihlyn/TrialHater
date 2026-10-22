@@ -12,29 +12,32 @@ namespace TrialHater.Core.Search;
 // sees everything, picks the hypothesis and its reply. Hypotheses split when the NPC plays a card
 // only some of them hold.
 //
-// Win/no-win only, so cutoffs come early; the searched tree shrinks fast with cards on the board
-// (recorded decisions: about 1 s median for an opening, milliseconds from the third card on).
+// Threshold only (win, or draw or better), so cutoffs come early; the searched tree shrinks fast
+// with cards on the board (recorded decisions: about 1 s median for an opening, milliseconds from
+// the third card on).
 public static class SureWin
 {
     // One bit per hypothesis in the memo key.
     public const int MaxHypotheses = 64;
 
-    // Whether the search applies: several hypotheses, and no card drawn at random (Chaos, or
-    // Order with the NPC's order hidden), which would need chance nodes.
+    // Whether the search applies: several hypotheses, and no card drawn at random (Chaos), which
+    // would need chance nodes. An Ordered NPC's hidden slot is the NPC's pick here: a guarantee
+    // has to hold whichever hidden card comes next.
     public static bool Applies(IReadOnlyList<Position> positions)
         => positions.Count is > 1 and <= MaxHypotheses
             && positions[0].BlueSelection != CardSelection.Random
             && positions[0].RedSelection != CardSelection.Random;
 
-    // The candidates that win against every hypothesis and every NPC reply. Throws
-    // OperationCanceledException when cancelled (the caller's budget).
-    public static HashSet<Move> Moves(IReadOnlyList<Position> positions, IEnumerable<Move> candidates, int workers, CancellationToken cancel)
+    // The candidates whose outcome for us is at least `atLeast` (1 a win, 0 a draw) against every
+    // hypothesis and every NPC reply. Throws OperationCanceledException when cancelled (the
+    // caller's budget).
+    public static HashSet<Move> Moves(IReadOnlyList<Position> positions, IEnumerable<Move> candidates, int workers, CancellationToken cancel, int atLeast = 1)
     {
         var wins = new System.Collections.Concurrent.ConcurrentBag<Move>();
         Parallel.ForEach(
             candidates,
             new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, workers), CancellationToken = cancel },
-            () => new Search(positions, cancel),
+            () => new Search(positions, atLeast, cancel),
             (move, _, search) =>
             {
                 if (search.Wins(move))
@@ -50,12 +53,14 @@ public static class SureWin
     {
         private readonly Hand[] root;
         private readonly Dictionary<(ulong Key, ulong Mask), bool> memo = [];
+        private readonly int atLeast;
         private readonly CancellationToken cancel;
         private long nodes;
 
-        public Search(IReadOnlyList<Position> positions, CancellationToken cancel)
+        public Search(IReadOnlyList<Position> positions, int atLeast, CancellationToken cancel)
         {
             this.root = positions.Select((p, i) => new Hand(new GameEngine(p), p.RedHand, i)).ToArray();
+            this.atLeast = atLeast;
             this.cancel = cancel;
         }
 
@@ -82,7 +87,7 @@ public static class SureWin
                 this.cancel.ThrowIfCancellationRequested();
             var first = set[0].Engine;
             if (first.IsFinished)
-                return first.BlueOutcome > 0;
+                return first.BlueOutcome >= this.atLeast;
 
             var mask = 0UL;
             foreach (var hand in set)

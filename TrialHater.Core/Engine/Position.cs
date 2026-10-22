@@ -12,8 +12,9 @@ public enum Side : byte
 }
 
 // How the side to move picks its card. Ordered and Random replace the free choice: Order makes the
-// leftmost remaining card mandatory; Chaos (and an opponent's Order with an unknown card order)
-// makes the card a chance outcome, so the search averages over it instead of choosing it.
+// leftmost remaining card mandatory; Chaos makes the card a chance outcome, so the search averages
+// over it instead of choosing it. An Ordered NPC's turn at a hidden slot is a chance outcome too
+// (Position.RedHiddenSlots).
 public enum CardSelection : byte
 {
     Free,
@@ -67,8 +68,12 @@ public sealed record Position
 
     public CardSelection BlueSelection { get; init; }
 
-    // An NPC's Order hand is in an order we cannot see, so callers usually downgrade it to Random.
     public CardSelection RedSelection { get; init; }
+
+    // Ordered Red only: the hand slots whose cards we cannot see. An NPC plays its slots left to
+    // right (5 recorded Order matches), so a visible slot's turn is known, and when a hidden slot's
+    // turn comes any of the hidden cards still in hand can be there: a chance node over them.
+    public int RedHiddenSlots { get; init; }
 
     public int Placed => this.Board.Count(c => c is not null);
 

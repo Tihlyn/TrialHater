@@ -7,8 +7,8 @@ public readonly record struct MoveValue(Move Move, double Value);
 
 // Exact game-theoretic value of a full-information position: negamax with alpha-beta and a
 // transposition table over W/D/L (+1/0/-1 from the side to move). Random card selection
-// (Chaos, or an opponent's Order in an unknown order) is a chance node: the value is the average
-// over the cards that could come up, each followed by the mover's best cell for that card.
+// (Chaos, or an Ordered NPC's hidden slot) is a chance node: the value is the average over the
+// cards that could come up, each followed by the mover's best cell for that card.
 //
 // Benchmarked on real decks (docs/RESEARCH.md): the hardest decision of a match, the opening,
 // solves in ~0.35 s on one core; every later move is faster. Not thread-safe: one per worker.
@@ -19,7 +19,14 @@ public sealed class Solver
     private const byte Upper = 3;
     private const byte NoMove = 255;
     private const int CancelCheckInterval = 4096;
-    private const double NullWindow = 1e-3;
+
+    // Values are searched in units of 1/Scale: a win is +Scale. Every value is then a whole number,
+    // because a chance node averages over 5, 4, 3 or 2 cards and each side draws at most
+    // 5 x 4 x 3 x 2 ways, so 120 x 120 divides every denominator. Sums and window bounds are exact in
+    // a double; with fractions, rounding at a Star1 window edge let a bound pass for an exact value
+    // and the table spread it (Chaos openings were off by up to 0.002 per move, depending on which
+    // positions the table held).
+    public const double Scale = 14400;
 
     private readonly Entry[] table;
     private readonly int tableMask;
@@ -44,7 +51,7 @@ public sealed class Solver
     public double RootValue()
     {
         var moves = this.ScoreRoot(fullWindow: false);
-        return moves.Count == 0 ? this.Terminal() : moves.Max(m => m.Value);
+        return moves.Count == 0 ? this.Terminal() / Scale : moves.Max(m => m.Value);
     }
 
     // Exact value of every legal root move, for the side to move. A forced slot (Chaos draw,
@@ -59,9 +66,9 @@ public sealed class Solver
         foreach (var move in moves)
         {
             var undo = this.Engine.Play(move.HandSlot, move.Cell);
-            var value = -this.Negamax(-1, 1);
+            var value = -this.Negamax(-Scale, Scale);
             this.Engine.Undo(move.HandSlot, move.Cell, undo);
-            list.Add(new MoveValue(move, value));
+            list.Add(new MoveValue(move, value / Scale));
         }
 
         return list;
@@ -69,11 +76,15 @@ public sealed class Solver
 
     // Value of the current engine state for the side to move; used by evaluators that walk the
     // tree themselves and share this solver's table.
-    public double Evaluate() => this.Negamax(-1, 1);
+    public double Evaluate() => this.Negamax(-Scale, Scale) / Scale;
 
     // Whether the current state is worth at least `bound` to the side to move: a null-window
     // search, much cheaper than an exact value when only a threshold matters.
-    public bool AtLeast(double bound) => this.Negamax(bound - NullWindow, bound) >= bound;
+    public bool AtLeast(double bound)
+    {
+        var target = Math.Ceiling((bound * Scale) - 1e-6);
+        return this.Negamax(target - 1, target) >= target;
+    }
 
     private List<MoveValue> ScoreRoot(bool fullWindow)
     {
@@ -81,7 +92,7 @@ public sealed class Solver
         var engine = this.Engine;
         var hand = engine.SelectableHand(this.Position.ForcedSlot);
         var empty = engine.EmptyMask;
-        var alpha = -1.0;
+        var alpha = -Scale;
         for (var slot = 0; slot < Position.HandSize; slot++)
         {
             if ((hand & (1 << slot)) == 0)
@@ -91,12 +102,12 @@ public sealed class Solver
                 if ((empty & (1 << cell)) == 0)
                     continue;
                 // A won root cannot improve; only the full-window scoring needs the rest.
-                if (!fullWindow && alpha >= 1)
+                if (!fullWindow && alpha >= Scale)
                     return list;
                 var undo = engine.Play(slot, cell);
-                var value = -this.Negamax(-1, fullWindow ? 1 : -alpha);
+                var value = -this.Negamax(-Scale, fullWindow ? Scale : -alpha);
                 engine.Undo(slot, cell, undo);
-                list.Add(new MoveValue(new Move(slot, cell), value));
+                list.Add(new MoveValue(new Move(slot, cell), value / Scale));
                 alpha = Math.Max(alpha, value);
             }
         }
@@ -104,7 +115,7 @@ public sealed class Solver
         return list;
     }
 
-    private double Terminal() => this.Engine.BlueToMove ? this.Engine.BlueOutcome : -this.Engine.BlueOutcome;
+    private double Terminal() => Scale * (this.Engine.BlueToMove ? this.Engine.BlueOutcome : -this.Engine.BlueOutcome);
 
     private double Negamax(double alpha, double beta)
     {
@@ -135,9 +146,10 @@ public sealed class Solver
         double best;
         byte bestMove;
         byte flag;
-        if (engine.MoverSelection == CardSelection.Random && BitCount(engine.MoverHand) > 1)
+        var chance = engine.ChanceHand;
+        if (chance != 0)
         {
-            best = this.ChanceValue(alpha, beta);
+            best = this.ChanceValue(chance, alpha, beta);
             bestMove = NoMove;
             flag = best <= alpha ? Upper : best >= beta ? Lower : Exact;
         }
@@ -159,13 +171,14 @@ public sealed class Solver
     }
 
     // Average over the card that comes up, then the best cell for it. Star1 pruning (Ballard 1983):
-    // every outcome is in [-1, 1], so after k of n cards the average is bounded; each remaining card
-    // is searched only in the window that could still move the average across (alpha, beta), and
-    // the node stops as soon as it cannot. A fail-low/high child implies the node fails the same
-    // way, so a completed loop is exact. Without this a Chaos opening took over a minute.
-    private double ChanceValue(double alpha, double beta)
+    // every outcome is in [-Scale, Scale], so after k of n cards the average is bounded; each
+    // remaining card is searched only in the window that could still move the average across
+    // (alpha, beta), and the node stops as soon as it cannot. A fail-low/high child implies the node
+    // fails the same way, so a completed loop is exact. Without this a Chaos opening took over a
+    // minute. All whole numbers (Scale): the comparisons are exact, and a cutoff's bound is rounded
+    // towards the true value, which is a whole number too.
+    private double ChanceValue(int hand, double alpha, double beta)
     {
-        var hand = this.Engine.MoverHand;
         var n = BitCount(hand);
         var sum = 0.0;
         var done = 0;
@@ -173,25 +186,21 @@ public sealed class Solver
         {
             if ((hand & (1 << slot)) == 0)
                 continue;
-            var rest = n - done - 1;
-            var low = Math.Max(-1.0, (n * alpha) - sum - rest);
-            var high = Math.Min(1.0, (n * beta) - sum + rest);
-
-            // In exact arithmetic the cutoffs below keep this window non-empty; rounding can miss a
-            // cutoff by 1e-16 and leave it empty, and an empty max is -infinity. Return the bound
-            // the cutoff would have (a live 2026-10-19 Chaos position scored a move -infinity).
-            if (high <= -1)
-                return (sum - rest - 1) / n;
-            if (low >= 1)
-                return (sum + rest + 1) / n;
+            var rest = (n - done - 1) * Scale;
+            var low = Math.Max(-Scale, (n * alpha) - sum - rest);
+            var high = Math.Min(Scale, (n * beta) - sum + rest);
+            if (high <= -Scale)
+                return Math.Ceiling((sum - rest - Scale) / n);
+            if (low >= Scale)
+                return Math.Floor((sum + rest + Scale) / n);
 
             sum += this.MaxValue(1 << slot, low, high, NoMove).Value;
             done++;
-            var left = n - done;
-            if ((sum + left) / n <= alpha)
-                return (sum + left) / n;
-            if ((sum - left) / n >= beta)
-                return (sum - left) / n;
+            var left = (n - done) * Scale;
+            if (sum + left <= n * alpha)
+                return Math.Floor((sum + left) / n);
+            if (sum - left >= n * beta)
+                return Math.Ceiling((sum - left) / n);
         }
 
         return sum / n;

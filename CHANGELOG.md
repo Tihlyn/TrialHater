@@ -5,6 +5,36 @@ Notable changes are recorded here using the Keep a Changelog format and semantic
 
 ## Unreleased
 
+### Changed
+
+- Order: the NPC's next card is no longer treated as a random draw. NPCs play their hand left to
+  right, so with Three Open the visible cards' turns are known and only the hidden ones are a draw.
+  In simulation (a recorded Three Open + Order matchup, 300 deals) wins against a perfect opponent
+  went from 81% to 92%, never worse, and the slowest decision from 10 s to 0.5 s. The sure-win check
+  now applies to Order too.
+- Openings already solved are remembered (`solve_cache.json` in the plugin's config folder, shared
+  by all characters) and reused when the same position comes back, which farming does constantly:
+  the move is the same, only the wait goes. In simulation (40 Hall Overseer Chaos matches in a row)
+  the slowest decision of a match averaged 14 s before and 5 s after, most openings under 1 s once
+  warm; the NPC opening first gives more positions to fill.
+- When no move wins whatever the NPC's hidden cards are, auto play now keeps the moves that do not
+  lose against any of them, if there are some. In simulation (16 recorded matchups, 300 deals each)
+  losses against a perfect opponent went from 15.4% to 13.9% (75 deals better, 3 worse); against a
+  realistic NPC there was no measurable difference. It adds about 1.5 s per match.
+- Chaos: auto play now plays for the NPC's likely mistakes when that costs little. Among the moves
+  within 0.1 of the best expected result it picks the one that does best against the NPC model,
+  where it used to take the best expected result alone. In simulation (11 recorded Chaos
+  matchups, 60 deals each) losses against the fitted NPC model went from 20% to 15% and wins from
+  47% to 54%; against NPCs that play differently from the model it still gained 0 to 4 points and
+  was never worse; against a perfect opponent the change was within noise. The decision reason
+  says "within 0.1 of the best expected value" when this applies. Other rules are unchanged.
+
+### Fixed
+
+- Chaos move values were slightly off (up to 0.002 per move), and differed depending on what the
+  solver had searched before: rounding at the edges of the chance-node pruning let a bound pass
+  for an exact value. Values are now exact. Deck ratings under Chaos are recomputed once.
+
 ## [0.2.5] - 2026-10-21
 
 ### Changed

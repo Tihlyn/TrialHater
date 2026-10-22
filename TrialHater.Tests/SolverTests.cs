@@ -1,5 +1,6 @@
 using TrialHater.Core.Cards;
 using TrialHater.Core.Engine;
+using TrialHater.Core.Match;
 using TrialHater.Core.Rules;
 using TrialHater.Core.Search;
 using Xunit;
@@ -75,6 +76,82 @@ public class SolverTests
                     var naive = -Naive(engine);
                     engine.Undo(mv.Move.HandSlot, mv.Move.Cell, undo);
                     Assert.True(Math.Abs(naive - mv.Value) < 1e-9, $"table 2^{bits} {p.Describe()} {mv.Move}: solver {mv.Value} naive {naive}");
+                }
+            }
+        }
+    }
+
+    // An Order NPC plays its slots left to right: a visible slot's turn is known, a hidden slot's
+    // turn draws any hidden card still in hand, and a visible slot keeps its turn even when the
+    // hidden card played earlier came from a later slot.
+    [Fact]
+    public void OrderedNpcDrawsAmongHiddenSlotsInTurn()
+    {
+        var p = Pos(RuleSet.Of(TriadRule.Order), EmptyBoard(), Hand("1111", "1111", "1111", "1111", "1111"), Hand("2222", "3333", "4444", "5555", "6666"), Side.Red)
+            with { RedHiddenSlots = 0b01010 };
+        var engine = new Engine(p);
+        var cell = 0;
+        void Red(int expected, int chance, int play)
+        {
+            Assert.Equal(expected, engine.SelectableHand());
+            Assert.Equal(chance, engine.ChanceHand);
+            engine.Play(play, cell++);
+            if (!engine.IsFinished)
+                engine.Play(System.Numerics.BitOperations.TrailingZeroCount(engine.BlueHand), cell++);
+        }
+
+        Red(0b00001, 0, play: 0);
+        Red(0b01010, 0b01010, play: 3);
+        Red(0b00100, 0, play: 2);
+        Red(0b00010, 0, play: 1);
+        Red(0b10000, 0, play: 4);
+        Assert.True(engine.IsFinished);
+    }
+
+    [Fact]
+    public void AnOrderViewMarksTheNpcsHiddenSlots()
+    {
+        HandSlot[] blue = [.. Hand("1111", "1111", "1111", "1111", "1111").Select(c => HandSlot.Of(c!.Value))];
+        HandSlot[] red = [HandSlot.Of(C("2222")), HandSlot.Hidden, HandSlot.Of(C("4444")), HandSlot.Hidden, HandSlot.Of(C("6666"))];
+        var hand = Hand("2222", "3333", "4444", "5555", "6666");
+        var order = new MatchView(RuleSet.Of(TriadRule.Order, TriadRule.ThreeOpen), EmptyBoard(), blue, red, Side.Blue).ToPosition(hand);
+        Assert.Equal((CardSelection.Ordered, 0b01010), (order.RedSelection, order.RedHiddenSlots));
+        var chaos = new MatchView(RuleSet.Of(TriadRule.Chaos, TriadRule.ThreeOpen), EmptyBoard(), blue, red, Side.Blue).ToPosition(hand);
+        Assert.Equal((CardSelection.Random, 0), (chaos.RedSelection, chaos.RedHiddenSlots));
+    }
+
+    [Fact]
+    public void OrderedNpcWithEveryCardHiddenIsADrawEachTurn()
+    {
+        var rng = new Random(5);
+        var cards = Catalog.All.ToList();
+        for (var round = 0; round < 15; round++)
+        {
+            var p = RandomPosition(rng, cards, RuleSet.Of(TriadRule.Order), placed: 3 + rng.Next(2));
+            var hidden = new Solver(p with { RedHiddenSlots = 0b11111 }).ScoreRootMoves();
+            var random = new Solver(p with { RedSelection = CardSelection.Random }).ScoreRootMoves();
+            Assert.Equal(random.Select(m => (m.Move, Math.Round(m.Value, 9))), hidden.Select(m => (m.Move, Math.Round(m.Value, 9))));
+        }
+    }
+
+    [Fact]
+    public void OrderWithHiddenSlotsMatchesNaive()
+    {
+        var rng = new Random(9);
+        var cards = Catalog.All.ToList();
+        for (var round = 0; round < 25; round++)
+        {
+            var rules = RuleSet.Of(TriadRule.Order).With(rng.Next(2) == 0 ? TriadRule.Plus : TriadRule.None).With(rng.Next(2) == 0 ? TriadRule.Same : TriadRule.None);
+            var p = RandomPosition(rng, cards, rules, placed: 3 + rng.Next(3)) with { RedHiddenSlots = rng.Next(32) };
+            foreach (var bits in new[] { 4, 18 })
+            {
+                foreach (var mv in new Solver(p, bits).ScoreRootMoves())
+                {
+                    var engine = new Engine(p);
+                    var undo = engine.Play(mv.Move.HandSlot, mv.Move.Cell);
+                    var naive = -Naive(engine);
+                    engine.Undo(mv.Move.HandSlot, mv.Move.Cell, undo);
+                    Assert.True(Math.Abs(naive - mv.Value) < 1e-9, $"table 2^{bits} hidden {p.RedHiddenSlots} {p.Describe()} {mv.Move}: solver {mv.Value} naive {naive}");
                 }
             }
         }
@@ -167,8 +244,10 @@ public class SolverTests
             return best;
         }
 
-        if (engine.MoverSelection == CardSelection.Random && System.Numerics.BitOperations.PopCount((uint)hand) > 1)
+        var chance = engine.ChanceHand;
+        if (chance != 0)
         {
+            hand = chance;
             var sum = 0.0;
             var n = 0;
             for (var s = 0; s < 5; s++)

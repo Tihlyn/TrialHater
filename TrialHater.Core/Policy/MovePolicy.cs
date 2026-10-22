@@ -38,6 +38,20 @@ public sealed record PolicyOptions
     public TimeSpan SureWinBudget { get; init; } = TimeSpan.FromSeconds(5);
 
     public int SureWinParallelism { get; init; } = 4;
+
+    // When no move is a sure win, keep the moves that cannot lose whatever the hidden cards are
+    // (a sure draw or better), if there are any, before maximising the expected value. Shares the
+    // sure-win budget.
+    public bool SureDrawCheck { get; init; } = true;
+
+    // How far below the best expected minimax value a move may be and still be chosen for its
+    // value against the opponent model (at the root and inside the exploitation search). 0 keeps
+    // exploitation to exact ties; under Chaos values are averages and rarely tie. 2 or more lets
+    // the model decide alone.
+    public double ModelBand { get; init; }
+
+    // Root values of early positions solved before (SolveCache), reused instead of solved again.
+    public SolveCache? Cache { get; init; }
 }
 
 public sealed record MoveAssessment(Move Move, double ExpectedValue, double WorstValue, bool Safe, double? Exploit, int Captures);
@@ -93,11 +107,27 @@ public static class MovePolicy
         // hypotheses still fill every worker (a Chaos opening with 3 hands used 3 of 16 cores);
         // moves in one chunk share a solver table.
         var captures = CaptureCounts(positions[0], legal);
-        var chunksPerHypothesis = Math.Clamp((int)Math.Ceiling(options.MaxParallelism / (double)positions.Length), 1, legal.Count);
-        var work = Enumerable.Range(0, positions.Length)
+        var results = new System.Collections.Concurrent.ConcurrentBag<(int H, MoveValue Value)>();
+
+        // Hypotheses whose position was solved before take its stored (exact) values.
+        var toSolve = new List<int>();
+        for (var h = 0; h < positions.Length; h++)
+        {
+            if (options.Cache is { } cache && cache.TryGet(positions[h], out var known) && legal.All(m => known.Any(k => k.Move == m)))
+            {
+                foreach (var value in known)
+                    results.Add((h, value));
+            }
+            else
+            {
+                toSolve.Add(h);
+            }
+        }
+
+        var chunksPerHypothesis = Math.Clamp((int)Math.Ceiling(options.MaxParallelism / (double)Math.Max(1, toSolve.Count)), 1, legal.Count);
+        var work = toSolve
             .SelectMany(h => legal.Select((m, i) => (h, m, i)).GroupBy(x => x.i % chunksPerHypothesis).Select(g => (H: h, Moves: g.Select(x => x.m).ToList())))
             .ToList();
-        var results = new System.Collections.Concurrent.ConcurrentBag<(int H, MoveValue Value)>();
         long nodes = 0;
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancel);
         budget.CancelAfter(options.SolveBudget);
@@ -135,31 +165,55 @@ public static class MovePolicy
             values[h] = new Dictionary<Move, double>(legal.Count);
         foreach (var (h, value) in results)
             values[h][value.Move] = value.Value;
+        foreach (var h in toSolve)
+            options.Cache?.Put(positions[h], [.. legal.Select(m => new MoveValue(m, values[h][m]))]);
+        var cacheNote = options.Cache is not null && SolveCache.Applies(positions[0]) && toSolve.Count < positions.Length
+            ? $"{positions.Length - toSolve.Count} of {positions.Length} hand(s) solved before; "
+            : string.Empty;
 
         var expected = legal.ToDictionary(m => m, m => Enumerable.Range(0, positions.Length).Sum(h => hypotheses[h].Weight * values[h][m]));
         var worst = legal.ToDictionary(m => m, m => Enumerable.Range(0, positions.Length).Min(h => values[h][m]));
-        var bestExpected = expected.Values.Max();
-        var safe = legal.Where(m => expected[m] >= bestExpected - Tolerance).ToList();
 
-        // A win in every hypothesis is not a win without knowing which hand the NPC holds: when
-        // some of these moves win against every hand (SureWin), keep only those.
+        // A win in every hypothesis is not a win without knowing which hand the NPC holds: one move
+        // has to serve every hand we cannot tell apart, and the NPC knows its own (SureWin). Keep
+        // the moves with the best such guarantee (sure wins, else sure draws or better, else all),
+        // then the best expected value among them.
+        var top = legal;
         var sureNote = string.Empty;
         var perHandWins = legal.Where(m => worst[m] >= 1 - Tolerance).ToList();
-        if (perHandWins.Count > 1 && options.SureWinBudget > TimeSpan.Zero && SureWin.Applies(positions))
+        var perHandNoLoss = options.SureDrawCheck ? legal.Where(m => worst[m] >= -Tolerance).ToList() : [];
+        var checkWins = perHandWins.Count > 1 || (perHandWins.Count == 1 && perHandNoLoss.Count > 1);
+        if ((checkWins || perHandNoLoss.Count > 1) && options.SureWinBudget > TimeSpan.Zero && SureWin.Applies(positions))
         {
             using var sureBudget = CancellationTokenSource.CreateLinkedTokenSource(cancel);
             sureBudget.CancelAfter(options.SureWinBudget);
+            var workers = Math.Min(options.SureWinParallelism, options.MaxParallelism);
             try
             {
-                var sure = SureWin.Moves(positions, perHandWins, Math.Min(options.SureWinParallelism, options.MaxParallelism), sureBudget.Token);
-                if (sure.Count > 0 && sure.Count < safe.Count)
-                    safe = safe.Where(sure.Contains).ToList();
-                sureNote = sure.Count == 0
-                    ? "no move wins against every hand unseen; "
-                    : $"sure win: {sure.Count} of {perHandWins.Count} per-hand wins hold against every hand; ";
+                var sure = checkWins ? SureWin.Moves(positions, perHandWins, workers, sureBudget.Token) : [];
+                if (sure.Count > 0)
+                {
+                    top = [.. legal.Where(sure.Contains)];
+                    sureNote = $"sure win: {sure.Count} of {perHandWins.Count} per-hand wins hold against every hand; ";
+                }
+                else
+                {
+                    sureNote = checkWins ? "no move wins against every hand unseen; " : string.Empty;
+                    var noLoss = perHandNoLoss.Count > 1 ? SureWin.Moves(positions, perHandNoLoss, workers, sureBudget.Token, atLeast: 0) : [];
+                    if (noLoss.Count > 0)
+                    {
+                        top = [.. legal.Where(noLoss.Contains)];
+                        sureNote += $"sure draw: {noLoss.Count} of {perHandNoLoss.Count} per-hand non-losses hold against every hand; ";
+                    }
+                    else if (perHandNoLoss.Count > 1)
+                    {
+                        sureNote += "no move avoids a loss against every hand unseen; ";
+                    }
+                }
             }
             catch (OperationCanceledException) when (!cancel.IsCancellationRequested)
             {
+                top = legal;
                 sureNote = $"sure-win check ran out ({options.SureWinBudget.TotalSeconds:0.#}s); ";
             }
             catch (OperationCanceledException)
@@ -167,6 +221,9 @@ public static class MovePolicy
                 return new Decision(DecisionStatus.Cancelled, null, [], hypotheses.Count, belief.Status, nodes, clock.Elapsed, "cancelled", fingerprint);
             }
         }
+
+        var bestExpected = top.Max(m => expected[m]);
+        var safe = top.Where(m => expected[m] >= bestExpected - Math.Max(Tolerance, options.ModelBand)).ToList();
 
         // Exploitation half, inside the safe set only.
         Dictionary<Move, double>? exploit = null;
@@ -189,7 +246,9 @@ public static class MovePolicy
             exploit = Exploit(positions, hypotheses, safe, options, cancel, ref nodes, out var timedOut);
             reason = timedOut
                 ? $"exploit budget ({options.ExploitBudget.TotalSeconds:0.#}s) ran out; tie broken by immediate captures"
-                : $"best of {safe.Count} safe moves against {options.Model.Name}";
+                : options.ModelBand > Tolerance
+                    ? $"best of {safe.Count} moves within {options.ModelBand:0.##} of the best expected value against {options.Model.Name}"
+                    : $"best of {safe.Count} safe moves against {options.Model.Name}";
             if (timedOut)
                 exploit = null;
         }
@@ -197,9 +256,10 @@ public static class MovePolicy
         if (cancel.IsCancellationRequested)
             return new Decision(DecisionStatus.Cancelled, null, [], hypotheses.Count, belief.Status, nodes, clock.Elapsed, "cancelled", fingerprint);
 
-        reason = sureNote + reason;
+        reason = cacheNote + sureNote + reason;
         var chosen = safe
             .OrderByDescending(m => exploit?.GetValueOrDefault(m, double.NegativeInfinity) ?? 0)
+            .ThenByDescending(m => expected[m])
             .ThenByDescending(m => worst[m])
             .ThenByDescending(m => captures[m])
             .ThenBy(m => m.HandSlot)
@@ -229,7 +289,7 @@ public static class MovePolicy
             Parallel.For(0, positions.Length, new ParallelOptions { MaxDegreeOfParallelism = options.MaxParallelism, CancellationToken = budget.Token }, h =>
             {
                 var solver = new Solver(positions[h], options.TableBits, budget.Token);
-                var evaluator = new ExploitEvaluator(solver, options.Model, options.DrawValue, budget.Token);
+                var evaluator = new ExploitEvaluator(solver, options.Model, options.DrawValue, budget.Token, options.ModelBand);
                 perHypothesis[h] = safe.ToDictionary(m => m, evaluator.AfterMove);
                 Interlocked.Add(ref used, solver.Nodes);
             });

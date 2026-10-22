@@ -71,18 +71,21 @@ public sealed record MatchView(
         return $"{this.Rules.Mask}|{board}|{blue}|{red}|{this.ToMove}|{this.ForcedSlot}|{this.NpcTriadId}|{this.Round}|{string.Join(",", this.RedPlayed)}|{string.Join(",", this.KnownDeck)}";
     }
 
-    // The position with Red's hand replaced by one hypothesis. Red's card order is not visible
-    // to us, so an Order NPC is searched as if its card were drawn at random.
+    // The position with Red's hand replaced by one hypothesis. An Order NPC plays its slots left
+    // to right; which card sits in a hidden slot is not known, so its turn there is a draw among
+    // the hidden cards (Position.RedHiddenSlots).
     public Position ToPosition(CardStats?[] redHand)
     {
         var blue = this.Blue.Select(s => s.State == SlotState.Visible ? s.Card : (CardStats?)null).ToArray();
-        var redSelection = this.Rules.Has(TriadRule.Chaos) || (this.Rules.Has(TriadRule.Order) && !this.RedFullyKnown)
-            ? CardSelection.Random
-            : this.Rules.Has(TriadRule.Order) ? CardSelection.Ordered : CardSelection.Free;
+        var hidden = 0;
+        for (var slot = 0; slot < this.Red.Length; slot++)
+            if (this.Red[slot].State == SlotState.Hidden)
+                hidden |= 1 << slot;
         return new Position(this.Rules, this.Board, blue, redHand, this.ToMove)
         {
             ForcedSlot = this.ToMove == Side.Blue ? this.ForcedSlot : -1,
-            RedSelection = redSelection,
+            RedSelection = this.Rules.Has(TriadRule.Chaos) ? CardSelection.Random : this.Rules.Has(TriadRule.Order) ? CardSelection.Ordered : CardSelection.Free,
+            RedHiddenSlots = this.Rules.Has(TriadRule.Order) ? hidden : 0,
         };
     }
 }

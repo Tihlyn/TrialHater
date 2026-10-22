@@ -84,9 +84,12 @@ public class LiveReplayTests
         Assert.Equal(9, moves.Count);
         Assert.All(moves, m => Assert.InRange(m.Value, -1.0, 1.0));
         // Brute-force-checked solver (SolverTests.ChaosMatchesNaiveUnderTableCollisions): cell 2 is
-        // the best at -0.035, the move played; cell 5 is -0.139, not -infinity.
-        Assert.Equal(-0.035, moves.Single(m => m.Move.Cell == 2).Value, 3);
-        Assert.Equal(moves.Max(m => m.Value), moves.Single(m => m.Move.Cell == 2).Value, 9);
+        // the best at -460/14400, the move played; cell 5 is not -infinity. (Before exact
+        // arithmetic it read -0.035, and the value moved with the table size.)
+        Assert.Equal(-460 / 14400.0, moves.Single(m => m.Move.Cell == 2).Value, 12);
+        Assert.Equal(moves.Max(m => m.Value), moves.Single(m => m.Move.Cell == 2).Value, 12);
+        foreach (var bits in new[] { 12, 16 })
+            Assert.Equal(moves, new Core.Search.Solver(position, bits).ScoreRootMoves());
     }
 
     // The first decision of that match as the plugin sees it: Three Open shows three of the four

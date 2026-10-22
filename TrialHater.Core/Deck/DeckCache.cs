@@ -16,7 +16,8 @@ namespace TrialHater.Core.Deck;
 public sealed class DeckCache
 {
     // Bump when the evaluation or the search changes in a way that changes results.
-    public const int Version = 1;
+    // 2: exact solver values under Chaos (whole numbers in 1/14400 units).
+    public const int Version = 2;
 
     private const int MaxSearches = 400;
     private const int MaxScores = 4000;

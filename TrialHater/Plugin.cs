@@ -7,7 +7,9 @@ using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using TrialHater.Core.Cards;
 using TrialHater.Core.Deck;
+using TrialHater.Core.Match;
 using TrialHater.Core.Policy;
+using TrialHater.Core.Rules;
 using TrialHater.Core.Search;
 using TrialHater.Core.Session;
 using TrialHater.Game;
@@ -17,6 +19,12 @@ namespace TrialHater;
 
 public sealed unsafe class Plugin : IDalamudPlugin
 {
+    // Under Chaos the model may choose among moves within ChaosModelBand of the best expected value:
+    // a quarter fewer losses against the fitted NPC model in the arena, never worse against other
+    // models, within noise against a perfect opponent (docs/RESEARCH.md §11-12). Other rules keep
+    // exploitation to exact ties until the arena says otherwise.
+    public const double ChaosModelBand = 0.1;
+
     private const string CommandName = "/thater";
     private const string RequestAddon = "TripleTriadRequest";
     private const string ResultAddon = "TripleTriadResult";
@@ -68,6 +76,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
         this.probe = new ModelProbe(Path.Combine(pluginInterface.GetPluginConfigDirectory(), "model_probe.jsonl"));
         this.journal = new MatchJournal(pluginInterface.GetPluginConfigDirectory(), (ex, msg) => log.Warning(ex, msg));
         this.Character = new CharacterData(pluginInterface.GetPluginConfigDirectory(), msg => log.Information(msg));
+        this.Solved = new SolveCacheFile(pluginInterface.GetPluginConfigDirectory(), msg => log.Information(msg));
         this.Decks = new DeckService((ex, msg) => log.Error(ex, msg));
         this.DeckChooser = new SessionDeckChooser(msg => log.Information(msg));
         this.DeckWriter = new DeckWriter(gameGui, msg => log.Information(msg));
@@ -139,6 +148,9 @@ public sealed unsafe class Plugin : IDalamudPlugin
     // Per character: the deck cache and our tournament drafts.
     public CharacterData Character { get; }
 
+    // Solved early positions (openings), reused when farming deals them again.
+    public SolveCacheFile Solved { get; }
+
     public DeckService Decks { get; }
 
     public SessionDeckChooser DeckChooser { get; }
@@ -168,6 +180,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
         this.DeckPrep.Dispose();
         this.Draft.Dispose();
         this.Character.Dispose();
+        this.Solved.Dispose();
         this.Tracker.Event -= this.OnTrackerEvent;
         this.Tracker.RedMoved -= this.journal.RedMoved;
         this.Tracker.MatchEnded -= this.OnMatchEnded;
@@ -187,12 +200,14 @@ public sealed unsafe class Plugin : IDalamudPlugin
         this.Configuration.Save();
     }
 
-    public PolicyOptions PolicyOptions => new()
+    public PolicyOptions PolicyOptionsFor(MatchView view) => new()
     {
         Exploit = this.Configuration.Exploit,
         ExploitMinPlaced = this.Configuration.ExploitMinPlaced,
         ExploitBudget = TimeSpan.FromSeconds(this.Configuration.ExploitBudgetSeconds),
         Model = new GreedyOpponent(this.Configuration.ModelEpsilon),
+        ModelBand = view.Rules.Has(TriadRule.Chaos) ? ChaosModelBand : 0,
+        Cache = this.Solved.Cache,
     };
 
     private void OnFrameworkUpdate(IFramework _)
@@ -205,6 +220,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
         }
 
         this.Character.Update(this.playerState.IsLoaded ? this.playerState.ContentId : 0, this.playerState.CharacterName, data.Cards, DateTime.UtcNow);
+        this.Solved.Tick(DateTime.UtcNow);
         var board = this.Addon(BoardReader.AddonName);
         var frame = board == null ? null : BoardReader.Read(board, this.frameCounter, this.objects.LocalPlayer?.Name.TextValue);
         var resultVisible = this.IsVisible(ResultAddon);
@@ -216,7 +232,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
         this.CheckOpponent(data, frame);
 
         if (this.Tracker.View is { ToMove: Core.Engine.Side.Blue } view)
-            this.Analysis.Request(view, this.CurrentNpc, data.Cards, this.PolicyOptions);
+            this.Analysis.Request(view, this.CurrentNpc, data.Cards, this.PolicyOptionsFor(view));
         else if (!this.Tracker.InMatch && this.Analysis.Latest is not null)
             this.Analysis.Clear();
 

@@ -37,6 +37,8 @@ public sealed class Engine
     private readonly ulong[] ownerZobrist = new ulong[1 << Position.Cells];
     private readonly ulong blueToMoveZobrist;
     private readonly int[] combo = new int[Position.Cells];
+    private readonly int redHidden;
+    private readonly int redSequence;
     private ulong cardKey;
 
     public Engine(Position position)
@@ -90,6 +92,11 @@ public sealed class Engine
         }
 
         this.BlueToMove = position.ToMove == Side.Blue;
+        if (this.RedSelection == CardSelection.Ordered)
+        {
+            this.redHidden = position.RedHiddenSlots & this.RedHand;
+            this.redSequence = this.RedHand;
+        }
     }
 
     public RuleSet Rules { get; }
@@ -155,16 +162,35 @@ public sealed class Engine
         }
     }
 
-    // Cards the mover may choose from right now (Ordered: the leftmost). Under Random the caller
-    // treats this mask as the chance outcomes rather than a choice.
+    // Cards the mover may play right now (Ordered: the leftmost). Under Random, and on an Ordered
+    // NPC's hidden-slot turn, these are the cards that can come up rather than a choice: an
+    // adversarial search lets the NPC pick, an averaging one uses ChanceHand.
     public int SelectableHand(int forcedSlot = -1)
     {
         var hand = this.MoverHand;
         if (forcedSlot >= 0)
             return hand & (1 << forcedSlot);
-        if (this.MoverSelection == CardSelection.Ordered && hand != 0)
+        if (this.MoverSelection != CardSelection.Ordered || hand == 0)
+            return hand;
+        if (this.BlueToMove || this.redHidden == 0)
             return hand & -hand;
-        return hand;
+
+        // The NPC has played (sequence - hand) of its slots in order, so its turn is at the next
+        // slot of the sequence. Hidden slots stand in for each other (any hidden card may be the
+        // one in the slot whose turn it is), so the slots left in hand are not always a suffix.
+        var next = NthBit(this.redSequence, BitOperations.PopCount((uint)this.redSequence) - BitOperations.PopCount((uint)hand));
+        return (next & this.redHidden) != 0 ? hand & this.redHidden : next;
+    }
+
+    // The cards one of which comes up at random for the mover (Chaos, or an Ordered NPC's hidden
+    // slot), or 0 when the mover chooses (or only one card can come up).
+    public int ChanceHand
+    {
+        get
+        {
+            var cards = this.MoverSelection == CardSelection.Free ? 0 : this.SelectableHand();
+            return BitOperations.PopCount((uint)cards) > 1 ? cards : 0;
+        }
     }
 
     // Places the mover's hand-slot card. Returns the undo token (the ownership before the move).
@@ -347,6 +373,14 @@ public sealed class Engine
         }
 
         return this.Reverse ? mine < theirs : mine > theirs;
+    }
+
+    // The n-th (from 0) set bit of a mask, as a mask.
+    private static int NthBit(int mask, int n)
+    {
+        for (var i = 0; i < n; i++)
+            mask &= mask - 1;
+        return mask & -mask;
     }
 
     private static int[] BuildNeighbors()
