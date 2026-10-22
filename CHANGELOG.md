@@ -5,6 +5,8 @@ Notable changes are recorded here using the Keep a Changelog format and semantic
 
 ## Unreleased
 
+## [0.2.6] - 2026-10-22
+
 ### Changed
 
 - Order: the NPC's next card is no longer treated as a random draw. NPCs play their hand left to
