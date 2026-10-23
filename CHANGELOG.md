@@ -5,6 +5,13 @@ Notable changes are recorded here using the Keep a Changelog format and semantic
 
 ## Unreleased
 
+### Fixed
+
+- Sending a report no longer holds up the game for a frame: the settings and the game's match
+  model are written out on a worker (the first report held the frame 55 ms).
+- Reports: the tournament queue's phase only shows while the queue runs, and numbers no longer
+  follow the system's decimal comma.
+
 ## [0.2.9] - 2026-10-23
 
 ### Added

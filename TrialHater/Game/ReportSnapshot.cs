@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using Dalamud.Plugin;
 using TrialHater.Core.Engine;
@@ -47,8 +48,24 @@ internal static class ReportSnapshot
         return plugin.AutoPlayer.Enabled || plugin.Session.Active || plugin.Tournament.Active ? ReportCategory.Stalled : ReportCategory.Other;
     }
 
-    // `extra`: the plugin's own session state, which only it can see.
+    // `extra`: the plugin's own session state, which only it can see. Numbers read the same on
+    // every tester's machine: the text is built under the invariant culture, nested ToStrings
+    // included, and the thread's culture is put back before returning.
     public static string State(Plugin plugin, string extra, Func<string, bool> visible)
+    {
+        var culture = CultureInfo.CurrentCulture;
+        CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
+        try
+        {
+            return Describe(plugin, extra, visible);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = culture;
+        }
+    }
+
+    private static string Describe(Plugin plugin, string extra, Func<string, bool> visible)
     {
         var s = new StringBuilder();
         var now = DateTimeOffset.Now;
@@ -67,7 +84,9 @@ internal static class ReportSnapshot
         s.AppendLine($"  last action: {Or(session.LastAction)}");
         s.AppendLine($"  deck row {session.DeckRow} [{string.Join(",", session.DeckCards)}] · pending: {Or(session.DeckPending)} · preparing: {Or(session.Preparing)} · rebuild: {Or(session.RebuildDeck)}");
         var tournament = plugin.Tournament;
-        s.AppendLine($"tournament: {(tournament.Active ? "active" : "off")} · {tournament.Phase} · {tournament.TournamentsDone}/{tournament.MaxTournaments} · distance {tournament.Distance:0.0}");
+        s.AppendLine(tournament.Active
+            ? $"tournament: active · {tournament.Phase} · {tournament.TournamentsDone}/{tournament.MaxTournaments} · distance {tournament.Distance:0.0}"
+            : "tournament: off");
         s.AppendLine($"  status: {tournament.Status}");
         s.AppendLine($"  last action: {Or(tournament.LastAction)}");
         s.AppendLine($"deck writer: {(plugin.DeckWriter.Active ? "active" : "idle")} · {Or(plugin.DeckWriter.Status)}");

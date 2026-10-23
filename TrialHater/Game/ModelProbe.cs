@@ -25,21 +25,22 @@ internal sealed unsafe class ModelProbe
 
     public void Capture(string trigger, MatchTracker tracker)
     {
-        if (Line(trigger, tracker) is not { } line)
+        if (Read(trigger, tracker) is not { } sample)
             return;
         Directory.CreateDirectory(Path.GetDirectoryName(this.path)!);
-        File.AppendAllLines(this.path, [line]);
+        File.AppendAllLines(this.path, [JsonSerializer.Serialize(sample)]);
     }
 
-    // One probe line for the model as it is now, or null when there is none (reports use it).
-    public static string? Line(string trigger, MatchTracker tracker)
+    // The model as it is now with what the board shows, or null when there is none. Everything in
+    // it is copied, so a report can serialize it on a worker.
+    public static object? Read(string trigger, MatchTracker tracker)
     {
         var address = ModelAddress();
         if (address == 0)
             return null;
         var bytes = new ReadOnlySpan<byte>((void*)address, ModelSize).ToArray();
         var frame = tracker.Last;
-        return JsonSerializer.Serialize(new
+        return new
         {
             time = DateTime.UtcNow,
             trigger,
@@ -50,12 +51,12 @@ internal sealed unsafe class ModelProbe
             rules = tracker.Rules.ToString(),
             turnState = frame?.TurnState,
             canAct = frame?.CanAct,
-            board = frame?.Board.Select(Describe),
-            blue = frame?.Blue.Select(Describe),
-            red = frame?.Red.Select(Describe),
-            values = frame?.LeadingValues,
+            board = frame?.Board.Select(Describe).ToArray(),
+            blue = frame?.Blue.Select(Describe).ToArray(),
+            red = frame?.Red.Select(Describe).ToArray(),
+            values = frame?.LeadingValues.ToArray(),
             model = Convert.ToHexString(bytes),
-        });
+        };
     }
 
     private static string Describe(SlotRaw slot)

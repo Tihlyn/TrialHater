@@ -66,8 +66,11 @@ public sealed class IssueReporter : IDisposable
         return request;
     }
 
-    // Framework thread. `files` were copied from the game this tick; the rest is read on a worker.
-    public void Send(ReportCategory category, string description, string headline, string name, string world, List<ReportFile> files, bool probeOn)
+    // Framework thread. `files` were copied from the game this tick; `serialize` turns what was
+    // copied as objects into files on the worker (JSON is slow the first time: the first report
+    // held the frame 55 ms serializing there); the rest is read on the worker too.
+    public void Send(ReportCategory category, string description, string headline, string name, string world, List<ReportFile> files,
+        Func<IEnumerable<ReportFile>> serialize, bool probeOn)
     {
         if (name.Length == 0 || world.Length == 0)
         {
@@ -89,6 +92,7 @@ public sealed class IssueReporter : IDisposable
             var folder = "-";
             try
             {
+                files.AddRange(serialize());
                 files.Add(new ReportFile("log.txt", string.Join("\n", LogExcerpt.Select(LogExcerpt.Tail(this.dalamudLog, int.MaxValue, LogBytes), "TrialHater", LogLines))));
                 files.Add(new ReportFile("matches.csv", this.Records("matches.csv", 60, keepHeader: true)));
                 files.Add(new ReportFile("npc_moves.jsonl", this.Records("npc_moves.jsonl", 30)));

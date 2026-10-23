@@ -76,6 +76,9 @@ public sealed class Configuration : IPluginConfiguration
         return config;
     }
 
+    // A copy for a report, serialized on a worker while the settings may change.
+    public Configuration Copy() => (Configuration)this.MemberwiseClone();
+
     public void Save()
     {
         this.Clamp();

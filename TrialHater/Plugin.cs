@@ -572,7 +572,8 @@ public sealed unsafe class Plugin : IDalamudPlugin
 
     public void OpenReport() => this.ReportWindow.Open(ReportSnapshot.Suggest(this));
 
-    // Copies the state for a report on the framework thread; IssueReporter does the rest on a worker.
+    // Copies the state for a report on the framework thread; IssueReporter serializes and sends it on
+    // a worker.
     private void FileReport(ReportCategory category, string description)
     {
         var loaded = this.playerState.IsLoaded;
@@ -582,22 +583,25 @@ public sealed unsafe class Plugin : IDalamudPlugin
         var extra = $"plugin: session deck rules [{(this.sessionDeckRules is { } chosen ? chosen.ToString() : "-")}] · rebuild for "
                     + $"[{(this.rebuildFor is { } rebuild ? rebuild.ToString() : "-")}] · {this.sessionRebuilds} rebuild(s) · challenge window "
                     + (this.challengeRules.TryGetValue(npc, out var shown) ? $"showed [{shown.Rules}] at {shown.Seen.ToLocalTime():HH:mm:ss}" : "not seen for this NPC");
-        var files = new List<ReportFile>
-        {
-            new("state.txt", ReportSnapshot.State(this, extra, this.IsVisible)),
-            new("config.json", JsonSerializer.Serialize(this.Configuration, new JsonSerializerOptions { WriteIndented = true })),
-        };
+        var files = new List<ReportFile> { new("state.txt", ReportSnapshot.State(this, extra, this.IsVisible)) };
+        var config = this.Configuration.Copy();
+        object? model = null;
         try
         {
-            if (ModelProbe.Line("report", this.Tracker) is { } model)
-                files.Add(new ReportFile("game_model.json", model));
+            model = ModelProbe.Read("report", this.Tracker);
         }
         catch (Exception ex)
         {
             this.Log.Warning(ex, "[Report] could not copy the game's match model");
         }
 
-        this.Reporter.Send(category, description, ReportSnapshot.Headline(this), name, world, files, this.Configuration.ModelProbe);
+        this.Reporter.Send(category, description, ReportSnapshot.Headline(this), name, world, files, () =>
+        {
+            var serialized = new List<ReportFile> { new("config.json", JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true })) };
+            if (model is not null)
+                serialized.Add(new ReportFile("game_model.json", JsonSerializer.Serialize(model)));
+            return serialized;
+        }, this.Configuration.ModelProbe);
     }
 
     // autoPlayed = how many of our cards the auto player placed this match.
