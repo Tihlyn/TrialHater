@@ -1,48 +1,104 @@
 # TrialHater
 
-A private Dalamud plugin that plays FFXIV Triple Triad against NPCs. It reads the match from the game and enumerates every hand the NPC could be holding (at most 10). It solves each hand exactly and plays the move that keeps the best guaranteed result. Among the moves that do, it picks the one most likely to win against the NPC's play.
+A Dalamud plugin that plays FFXIV Triple Triad against NPCs. It reads the match from the game, enumerates every hand the NPC could be holding, solves each one exactly and plays the move that keeps the best guaranteed result; among those, it picks the one most likely to win against how NPCs actually play. Around that: farming sessions (until N matches or until every card the NPC drops is in), a deck builder that writes the best deck into a saved slot, and the Open Tournament (draft advice, automatic draft, queueing).
 
-The design and the measurements behind it are in [docs/RESEARCH.md](docs/RESEARCH.md). The short version:
-- An exact search of the opening takes about 0.35 s on one core.
-- The solver used by TriadBuddy, Saucy and ATTG loses 32–50% of drawn-or-better positions to a competent opponent.
-- Safe-then-exploit wins 95–98.5% against the modelled opponent and loses none.
+> Unofficial tool. It automates gameplay, which Square Enix's terms forbid, and it will never be submitted to the official repository.
 
-> Private tool. It automates gameplay, which Square Enix's terms forbid, and it will never be submitted to the official repository.
+## Install
 
-## Layout
+`/xlsettings` → Experimental → Custom Plugin Repositories, add
 
 ```
-TrialHater.Core/     pure game logic, no Dalamud: cards, rules, engine, exact solver, NPC hand belief, move policy
-TrialHater/          the plugin: sheet data, board reader, match tracker, analysis worker, actuator, auto play, windows
-TrialHater.Tests/    xunit tests for Core (rules, solver vs naive search, belief, policy)
-docs/                RESEARCH (decision record), RULES (engine spec + confidence), MODEL_MAPPING (reverse engineering)
-research/            the original research bundle, benchmarks (validation/SolverBench) and the engine differential (validation/EngineDiff)
+https://raw.githubusercontent.com/Tihlyn/TrialHater/main/repo.json
 ```
 
-## Build and run
+then install TrialHater from `/xlplugins`. Releases are listed in [CHANGELOG.md](CHANGELOG.md).
 
-```powershell
-dotnet build TrialHater.sln -c Debug
-dotnet test TrialHater.Tests
-```
+## What it does
 
-In game: `/xlsettings` → Experimental → add `TrialHater\bin\Debug\net10.0-windows\TrialHater.dll` as a Dev Plugin Location. Then enable it under `/xlplugins` → Dev Tools, and run `/xlreload TrialHater` after each rebuild.
+**Auto play.** On our turn the plugin places the recommended card itself (`/thater auto`, or the toggle at the top of the window). An action only counts once the card is seen on the board, a decision is never sent for a position that has changed since, and anything it cannot read or verify stops it with a reason instead of a guess. While auto play runs unattended it keeps the game from flagging the player as idle (a brief Control press once the idle counters pass 30 s).
+
+**Farming** (Farm tab). Target an NPC, stand next to it, and either:
+- *Start farming*: N matches, or until stopped (0);
+- *Farm until every card drops*: until every card the NPC can drop is collected or in the bags. The tab lists the targeted NPC's drops and which are still missing; the session will not start with full bags and stops if they fill up.
+
+The session talks to the NPC, challenges, picks the deck, plays, rematches and quits through the result window. With "Sessions pick the best saved deck", it ranks your saved decks against the NPC and picks the best one in the deck window. With "Sessions build the best deck first", it searches the best deck from your whole collection and writes it into the one slot Settings allow before the first challenge, if it beats your saved decks clearly.
+
+The deck is chosen for the rules actually in force, read from the challenge window before every match (the NPC's own rules plus the region's, which change over time). If they are not the rules the deck was chosen for, the saved decks are ranked again, or, when the session builds decks, it declines that challenge (a rematch only offers saved decks), builds and writes the deck for the new rules, and challenges again.
+
+**Deck builder** (Decks tab). The best decks from the cards you own against the targeted NPC, how your saved decks compare, and a button to write one into the allowed slot through the Gold Saucer deck editor. Searches are cached per character and reused until a newly obtained card would change them.
+
+**Open Tournament** (Tournament tab).
+- *Draft advisor*: while the draft window is up, ranks the 27 possible decks under the tournament's rules against the decks players drafted before, and shows the option to take at each pick. With "Draft the advised deck" and auto play on, it drafts them itself, confirming only when the confirmation shows exactly the advised deck.
+- *Queue*: with the Open Tournament Official targeted, signs up, commences when the duty pops, plays, closes the results and rewards, targets the Official again and signs up for the next one, N tournaments or until stopped. Sign-up is open for the first 30 minutes after each start (every two hours, odd UTC hours); outside it the queue waits and says when it opens. English client only.
+- *Schedule*: the next 10 tournaments and their rules. *Our drafts*: each tournament we played, our deck and where we placed.
+
+**Match log** tab: every turn and event of the current match, as the tracker read it.
+
+The main window is drawn as a Triple Triad card. Always in view at the top: auto play, whatever is running with its stop button, and the opponent with the match's rules. Below: the match as the game lays it out, with the move to play glowing green and what it guarantees.
+
+## How it decides
+
+The design and every measurement are in [docs/RESEARCH.md](docs/RESEARCH.md); the rules engine and how each rule point was verified in [docs/RULES.md](docs/RULES.md).
+
+- **Exact search.** An NPC's hand is 5 cards from its deck data, at most 10 possible hands, so the plugin solves every one exactly (the opening in about 0.35 s on one core without Chaos). The solver used by TriadBuddy, Saucy and ATTG loses 32–50% of drawn-or-better positions to a competent opponent.
+- **Safe first.** A move that wins against every hand the NPC could hold is played first; failing that, one that never loses. Otherwise the move with the best result against the hidden cards.
+- **Then exploit.** NPCs do not look ahead: fitted to 1454 logged NPC moves they lean towards immediate captures, noisily. Among the safe moves the plugin takes the one that does best against that model. Under Chaos it may also take a move within 0.1 of the best expected value if it does better against the model.
+- **Chaos and Order.** Under Chaos the NPC's card is a random draw from its hand and the plugin plays the expected value of every draw. Under Order the NPC plays left to right, so its visible cards' turns are known.
+- **Solve cache.** Openings already solved are remembered across matches (`solve_cache.json`), which farming repeats constantly.
+
+In simulation on recorded matchups (`tools/Arena`, fresh NPC deals, the fitted NPC model as opponent): 96.6 / 3.0 / 0.4 % wins / draws / losses on 16 matchups without Chaos, 54 / 31 / 15 % on 11 Chaos matchups. Against real NPCs these hold within noise except Kaizan (more draws) and Tsuzura under Ascension (more losses); see RESEARCH §8–13.
+
+## Files
+
+Kept in `%APPDATA%\XIVLauncher\pluginConfigs\TrialHater\`:
+
+| File | Holds |
+|---|---|
+| `matches.csv` | one line per match: NPC, rules, result |
+| `npc_moves.jsonl` | every NPC move with the position, for fitting the NPC model |
+| `model_probe.jsonl` | the game's own match model at every turn (Settings → Diagnostics, off by default) |
+| `solve_cache.json` | solved openings, shared by all characters |
+| `tournament_decks.csv` | decks seen in Open Tournament results, for the draft advisor |
+| `owned_cards.txt` | the card ids you own, written by a deck search, for `tools/DeckBench` |
+| `characters/<content id>/` | per character: the deck cache and the Open Tournament record |
+
+## Commands and settings
 
 | Command | Effect |
 |---|---|
 | `/thater` | toggle the window |
 | `/thater config` | settings |
-| `/thater auto [on\|off]` | toggle auto play (placing the recommended card on our turn) |
+| `/thater auto [on\|off]` | toggle auto play |
 
-The main window is drawn as a Triple Triad card (version next to the name). At the top, always in view: auto play, whatever is running with its stop button, and the opponent with the match's rules. Below: the draft advisor while drafting, the match (both hands, the board, scores, and the move to play glowing green with what it guarantees), then tabs for farming, the deck builder, Open Tournaments and the match log. Settings choose whether the window opens when the plugin loads and the backdrop (Crimson or Midnight, and its opacity). A spinner shows whatever is still working (the solver with its time, deck searches, the draft ranking); a solver that failed says so.
+Settings (all apply immediately): window (open at load, backdrop and opacity); move choice (exploit inside the safe moves, model noise, exploit time budget, exploit from N placed cards, delay before placing); anti-AFK; farming (pick the best saved deck, build the best deck first, the one deck slot the plugin may overwrite, "None" by choice); Open Tournament (draft the advised deck); diagnostics (match model recording, the deck cache and clearing it).
 
-Deck searches are cached per character (`pluginConfigs/TrialHater/characters/<content id>/`): farming the same NPC again reuses the search until a newly obtained card would change it. The same folder records each Open Tournament we play (our deck and placing; top half = vetted), which breaks near-ties in the draft advice.
+## Development
 
-Target the NPC before challenging it. The target identifies the NPC's deck, and without that its hidden cards cannot be read.
+```
+TrialHater.Core/     pure game logic, no Dalamud: cards, rules, engine, exact solver, NPC hand belief, move policy,
+                     deck search and cache, session and tournament planners
+TrialHater/          the plugin: sheet data, board reader, match tracker, analysis worker, actuator, auto play,
+                     farming session, deck writer, tournament queue and draft, windows
+TrialHater.Tests/    xunit tests for Core
+tools/               Arena (policy simulation on recorded matchups), DeckBench (offline deck search),
+                     ProbeReplay (replays recorded matches through the engine), release.ps1
+research/            the original research bundle; validation/: SolverBench, EngineDiff (differential test against
+                     ATTG's engine), ModelFit (NPC move models)
+docs/                RESEARCH (decision record), RULES (engine spec), MODEL_MAPPING (game windows and memory)
+```
 
-## Versions and releases
+```powershell
+dotnet build TrialHater.sln -c Debug
+dotnet test TrialHater.Tests
+dotnet run --project tools/ProbeReplay -c Release    # after a play session: every recorded placement must replay exactly
+```
 
-The version lives in `Directory.Build.props` (`<Version>`); the window shows it next to the name and the changes go under `## Unreleased` in [CHANGELOG.md](CHANGELOG.md).
+For a dev build: `/xlsettings` → Experimental → add `TrialHater\bin\Debug\net10.0-windows\TrialHater.dll` as a Dev Plugin Location, enable it under `/xlplugins` → Dev Tools. It reloads on every rebuild, mid-match included. Engine changes must keep `research/validation/EngineDiff` at 0 mismatches.
+
+### Versions and releases
+
+The version lives in `Directory.Build.props` (`<Version>`); the window shows it next to the name and changes go under `## Unreleased` in [CHANGELOG.md](CHANGELOG.md).
 
 | Workflow | Trigger | Does |
 |---|---|---|
@@ -53,7 +109,7 @@ The version lives in `Directory.Build.props` (`<Version>`); the window shows it 
 Cut a release from a clean `main` that matches `origin/main`:
 
 ```powershell
-./tools/release.ps1 -Bump minor        # or patch / major, or -Version 1.0.0; -DryRun to preview
+./tools/release.ps1 -Bump patch        # or minor / major, or -Version 1.0.0; -DryRun to preview
 ```
 
 It runs the tests, dates the Unreleased notes, bumps `<Version>`, commits, tags `vX.Y.Z` and pushes both; CI does the rest. A testing build: `git tag testing-1.1.0.1; git push origin testing-1.1.0.1` (four parts, newer than the stable version).
@@ -62,16 +118,11 @@ It runs the tests, dates the Unreleased notes, bumps `<Version>`, commits, tags 
 
 | Piece | State |
 |---|---|
-| Rules engine, exact solver, belief, policy | Done. Brute-force-checked (Chaos included), differential-tested against ATTG's engine, live matches replay exactly |
-| Board reader, tracker, adviser window | Working in game (Ascension, Sudden Death, Three/All Open, Plus, Same, Chaos) |
-| Auto play of our moves | Working in game. 2026-10-19: 7 consecutive matches fully auto-played, 33 placements, all accepted, 6 wins / 1 loss (Chaos luck; every move optimal in hindsight) |
-| Journals | `matches.csv` (results), `npc_moves.jsonl` (NPC moves for the opponent model) |
-| Farming session (talk, challenge, deck, play, rematch, quit) | Working in game. 2026-10-19: 10-match session vs hall overseer (Chaos + Fallen Ace), 6W 4D 0L, every window action sent once. Two fixes from that run: the NPC-menu icon varies by NPC (71101/71102), and the session now quits through the last result window instead of ending before its buttons go live |
-| Open Tournament (Draft) | Matches auto-played after the fix for drafted decks; 2026-10-19: 2nd of 8. Draft picks and tournament windows are manual. The main window lists the next 10 tournaments and their rules |
-| Deck builder | Main window, "Deck builder": best decks from the owned cards against the targeted NPC, and how the saved decks compare (`TrialHater.Core/Deck`, offline: `tools/DeckBench`). Choosing a saved deck in the session waits on mapping the deck list's row selection |
-| Anti-AFK | Control press when the game's idle counters pass 30 s during unattended auto play (ported from MahjongHater) |
-| Deck writing | Working in game (2026-10-20): "Write #1 to Deck N" builds a deck through the Gold Saucer editor in about 5 s, checking the editor shows the target deck first and game memory after. Only the slot chosen in Settings is ever written. With "Sessions build the best deck first", a session builds the best deck against its NPC before talking to it, when it is new and beats the saved decks by 0.10 or more, then plays it |
-| Draft advisor | Main window, "Draft advisor", while the tournament draft window is up. The draft is three picks (two of pairs, one of single cards), so 27 decks are possible. The advisor ranks them under the current tournament's rules, against drafted decks seen in past tournaments (research/data/draft-decks.csv plus every results window since, in tournament_decks.csv), and shows one option per pick. With auto play on and "Draft the advised deck" set, the plugin presses those options and confirms, but only when the confirmation shows exactly the advised deck. It also presses OK on each round's report window |
-| Open Tournament queue | Main window, "Open Tournament queue": with the Official targeted, signs up, commences when the duty pops, and closes the results and rewards, N tournaments in a row. The draft and matches run on auto play (English client texts) |
-| Card registration, travel between NPCs | Not built |
-| Not yet seen in game | Random; a combo deciding Fallen Ace (docs/RULES.md) |
+| Rules engine, solver, belief, policy | Done. Brute-force-checked, differential-tested against ATTG's engine; 611 recorded matches replay with 0 mismatches |
+| Board reading, auto play | Working in game under every rule but Random |
+| Farming sessions | Working in game, including 100-match runs. New in 0.2.8: rules read from the challenge window (checked at Tsuzura, Momodi and Ruhtwyda); a mid-session deck rebuild not seen in game yet |
+| Deck builder, deck writing | Working in game; writes only the slot chosen in Settings |
+| Open Tournament draft, matches, queue | Working in game, retargeting the Official between tournaments included; waiting for the sign-up window is new in 0.2.8 |
+| Anti-AFK | Working in game |
+| Open questions | Tsuzura under Ascension loses more than the NPC model predicts (RESEARCH §13); Random and a combo deciding Fallen Ace not seen in game yet (RULES) |
+| Not built | Registering won cards from the bags; travelling between NPCs |
