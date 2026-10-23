@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.Command;
 using Dalamud.Interface.Windowing;
@@ -9,6 +10,7 @@ using TrialHater.Core.Cards;
 using TrialHater.Core.Deck;
 using TrialHater.Core.Match;
 using TrialHater.Core.Policy;
+using TrialHater.Core.Reporting;
 using TrialHater.Core.Rules;
 using TrialHater.Core.Search;
 using TrialHater.Core.Session;
@@ -97,6 +99,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
         this.DeckPrep = new SessionDeckPrep(msg => log.Information(msg));
         this.Draft = new DraftService(gameGui, pluginInterface.GetPluginConfigDirectory(), this.Character, msg => log.Information(msg));
         this.Tournament = new TournamentRunner(gameGui, targets, objects, condition, msg => log.Information(msg));
+        this.Reporter = new IssueReporter(pluginInterface.GetPluginConfigDirectory(), msg => log.Information(msg));
         this.Tracker.Event += this.OnTrackerEvent;
         this.Tracker.RedMoved += this.journal.RedMoved;
         this.Tracker.MatchEnded += this.OnMatchEnded;
@@ -122,13 +125,15 @@ public sealed unsafe class Plugin : IDalamudPlugin
         this.WindowSystem = new WindowSystem("TrialHater");
         this.MainWindow = new MainWindow(this);
         this.ConfigWindow = new ConfigWindow(this.Configuration, this.IdleGuard, this.Character);
+        this.ReportWindow = new ReportWindow(this);
         this.WindowSystem.AddWindow(this.MainWindow);
         this.WindowSystem.AddWindow(this.ConfigWindow);
+        this.WindowSystem.AddWindow(this.ReportWindow);
         this.MainWindow.IsOpen = this.Configuration.OpenAtStartup;
 
         commandManager.AddHandler(CommandName, new CommandInfo(this.OnCommand)
         {
-            HelpMessage = "Toggle the TrialHater window. '/thater config' opens the settings, '/thater auto on|off' toggles auto play.",
+            HelpMessage = "Toggle the TrialHater window. '/thater config' opens the settings, '/thater auto on|off' toggles auto play, '/thater report' reports an issue.",
             ShowInHelp = true,
         });
 
@@ -177,11 +182,15 @@ public sealed unsafe class Plugin : IDalamudPlugin
 
     public TournamentRunner Tournament { get; }
 
+    public IssueReporter Reporter { get; }
+
     public WindowSystem WindowSystem { get; }
 
     public MainWindow MainWindow { get; }
 
     public ConfigWindow ConfigWindow { get; }
+
+    public ReportWindow ReportWindow { get; }
 
     public NpcDeck? CurrentNpc => this.Data?.Npcs.Get(this.Tracker.NpcTriadId);
 
@@ -195,6 +204,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
         this.Draft.Dispose();
         this.Character.Dispose();
         this.Solved.Dispose();
+        this.Reporter.Dispose();
         this.Tracker.Event -= this.OnTrackerEvent;
         this.Tracker.RedMoved -= this.journal.RedMoved;
         this.Tracker.MatchEnded -= this.OnMatchEnded;
@@ -227,6 +237,8 @@ public sealed unsafe class Plugin : IDalamudPlugin
     private void OnFrameworkUpdate(IFramework _)
     {
         this.frameCounter++;
+        if (this.Reporter.TakeRequest() is { } report)
+            this.FileReport(report.Category, report.Description);
         if (this.Data is not { } data)
         {
             this.IdleGuard.Tick(false, false, DateTime.UtcNow);
@@ -558,6 +570,36 @@ public sealed unsafe class Plugin : IDalamudPlugin
     private IReadOnlyList<CardStats[]> SavedDecks(CardCatalog cards)
         => Collection.SavedDecks(cards).Select(d => d.Cards.Select(c => c.Stats).ToArray()).ToList();
 
+    public void OpenReport() => this.ReportWindow.Open(ReportSnapshot.Suggest(this));
+
+    // Copies the state for a report on the framework thread; IssueReporter does the rest on a worker.
+    private void FileReport(ReportCategory category, string description)
+    {
+        var loaded = this.playerState.IsLoaded;
+        var name = loaded ? this.playerState.CharacterName : string.Empty;
+        var world = loaded ? this.playerState.HomeWorld.ValueNullable?.Name.ExtractText() ?? string.Empty : string.Empty;
+        var npc = this.Tracker.NpcTriadId;
+        var extra = $"plugin: session deck rules [{(this.sessionDeckRules is { } chosen ? chosen.ToString() : "-")}] · rebuild for "
+                    + $"[{(this.rebuildFor is { } rebuild ? rebuild.ToString() : "-")}] · {this.sessionRebuilds} rebuild(s) · challenge window "
+                    + (this.challengeRules.TryGetValue(npc, out var shown) ? $"showed [{shown.Rules}] at {shown.Seen.ToLocalTime():HH:mm:ss}" : "not seen for this NPC");
+        var files = new List<ReportFile>
+        {
+            new("state.txt", ReportSnapshot.State(this, extra, this.IsVisible)),
+            new("config.json", JsonSerializer.Serialize(this.Configuration, new JsonSerializerOptions { WriteIndented = true })),
+        };
+        try
+        {
+            if (ModelProbe.Line("report", this.Tracker) is { } model)
+                files.Add(new ReportFile("game_model.json", model));
+        }
+        catch (Exception ex)
+        {
+            this.Log.Warning(ex, "[Report] could not copy the game's match model");
+        }
+
+        this.Reporter.Send(category, description, ReportSnapshot.Headline(this), name, world, files, this.Configuration.ModelProbe);
+    }
+
     // autoPlayed = how many of our cards the auto player placed this match.
     private void OnMatchEnded(int blueCards)
     {
@@ -600,6 +642,9 @@ public sealed unsafe class Plugin : IDalamudPlugin
         {
             case "config":
                 this.ConfigWindow.IsOpen = true;
+                break;
+            case "report":
+                this.OpenReport();
                 break;
             case "auto":
                 var on = args.Length > 1 ? args[1].Equals("on", StringComparison.OrdinalIgnoreCase) : !this.AutoPlayer.Enabled;

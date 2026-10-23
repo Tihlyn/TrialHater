@@ -5,6 +5,15 @@ Notable changes are recorded here using the Keep a Changelog format and semantic
 
 ## Unreleased
 
+### Added
+
+- Report an issue: the bug button next to Settings (or `/thater report`) sends a report to the
+  TrialHater reports repo, where it becomes an issue. Pick what went wrong (plugin stalled,
+  NoBelief: no move played, solving stalled, other) and say what happened. The report carries
+  what the plugin is doing, the match on screen and the solver's decision, the plugin's lines from
+  dalamud.log, recent matches and the settings. Reports are accepted from testers' characters
+  only; a copy of each stays in `pluginConfigs/TrialHater/reports`.
+
 ## [0.2.8] - 2026-10-22
 
 ### Changed

@@ -62,6 +62,8 @@ Kept in `%APPDATA%\XIVLauncher\pluginConfigs\TrialHater\`:
 | `tournament_decks.csv` | decks seen in Open Tournament results, for the draft advisor |
 | `owned_cards.txt` | the card ids you own, written by a deck search, for `tools/DeckBench` |
 | `characters/<content id>/` | per character: the deck cache and the Open Tournament record |
+| `reports/` | a copy of the last 20 issue reports sent from the plugin |
+| `reporter.key` | this install's key for issue reports (the relay recognises testers by it) |
 
 ## Commands and settings
 
@@ -70,6 +72,7 @@ Kept in `%APPDATA%\XIVLauncher\pluginConfigs\TrialHater\`:
 | `/thater` | toggle the window |
 | `/thater config` | settings |
 | `/thater auto [on\|off]` | toggle auto play |
+| `/thater report` | report an issue (also the bug button next to Settings) |
 
 Settings (all apply immediately): window (open at load, backdrop and opacity); move choice (exploit inside the safe moves, model noise, exploit time budget, exploit from N placed cards, delay before placing); anti-AFK; farming (pick the best saved deck, build the best deck first, the one deck slot the plugin may overwrite, "None" by choice); Open Tournament (draft the advised deck); diagnostics (match model recording, the deck cache and clearing it).
 

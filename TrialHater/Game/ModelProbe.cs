@@ -25,12 +25,21 @@ internal sealed unsafe class ModelProbe
 
     public void Capture(string trigger, MatchTracker tracker)
     {
+        if (Line(trigger, tracker) is not { } line)
+            return;
+        Directory.CreateDirectory(Path.GetDirectoryName(this.path)!);
+        File.AppendAllLines(this.path, [line]);
+    }
+
+    // One probe line for the model as it is now, or null when there is none (reports use it).
+    public static string? Line(string trigger, MatchTracker tracker)
+    {
         var address = ModelAddress();
         if (address == 0)
-            return;
+            return null;
         var bytes = new ReadOnlySpan<byte>((void*)address, ModelSize).ToArray();
         var frame = tracker.Last;
-        var line = JsonSerializer.Serialize(new
+        return JsonSerializer.Serialize(new
         {
             time = DateTime.UtcNow,
             trigger,
@@ -47,8 +56,6 @@ internal sealed unsafe class ModelProbe
             values = frame?.LeadingValues,
             model = Convert.ToHexString(bytes),
         });
-        Directory.CreateDirectory(Path.GetDirectoryName(this.path)!);
-        File.AppendAllLines(this.path, [line]);
     }
 
     private static string Describe(SlotRaw slot)

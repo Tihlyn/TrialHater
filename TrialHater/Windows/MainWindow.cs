@@ -46,12 +46,16 @@ public sealed class MainWindow : Window
         var max = min + ImGui.GetWindowSize();
         Chrome.Backdrop(config.Backdrop, config.BackdropOpacity);
         Chrome.PushInner();
-        switch (Chrome.Header("TrialHater", Plugin.VersionText, (FontAwesomeIcon.Cog, "Settings"), (FontAwesomeIcon.Times, "Close (/thater)")))
+        switch (Chrome.Header("TrialHater", Plugin.VersionText, (FontAwesomeIcon.Bug, "Report an issue (/thater report)"),
+                    (FontAwesomeIcon.Cog, "Settings"), (FontAwesomeIcon.Times, "Close (/thater)")))
         {
             case 0:
-                this.plugin.ConfigWindow.Toggle();
+                this.plugin.OpenReport();
                 break;
             case 1:
+                this.plugin.ConfigWindow.Toggle();
+                break;
+            case 2:
                 this.IsOpen = false;
                 break;
         }

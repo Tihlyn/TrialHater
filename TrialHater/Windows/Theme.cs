@@ -64,6 +64,8 @@ internal static class Theme
     public static readonly Vector2 MainMinimum = new(440f, 420f);
     public static readonly Vector2 ConfigSize = new(500f, 700f);
     public static readonly Vector2 ConfigMinimum = new(420f, 360f);
+    public static readonly Vector2 ReportSize = new(460f, 560f);
+    public static readonly Vector2 ReportMinimum = new(380f, 380f);
     public static readonly Vector2 Maximum = new(1000f, 1600f);
 
     public static float Px(float value) => value * ImGuiHelpers.GlobalScale;
