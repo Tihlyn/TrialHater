@@ -5,6 +5,8 @@ Notable changes are recorded here using the Keep a Changelog format and semantic
 
 ## Unreleased
 
+## [0.2.10] - 2026-10-23
+
 ### Fixed
 
 - Sending a report no longer holds up the game for a frame: the settings and the game's match
