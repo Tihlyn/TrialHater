@@ -5,6 +5,8 @@ Notable changes are recorded here using the Keep a Changelog format and semantic
 
 ## Unreleased
 
+## [0.2.11] - 2026-10-23
+
 ### Changed
 
 - Open Tournament: when no hand the opponent could hold fits what has been seen (NoBelief), the
