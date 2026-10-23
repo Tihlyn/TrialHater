@@ -5,6 +5,8 @@ Notable changes are recorded here using the Keep a Changelog format and semantic
 
 ## Unreleased
 
+## [0.2.9] - 2026-10-23
+
 ### Added
 
 - Report an issue: the bug button next to Settings (or `/thater report`) sends a report to the
