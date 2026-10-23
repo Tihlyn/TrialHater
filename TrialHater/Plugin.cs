@@ -232,6 +232,9 @@ public sealed unsafe class Plugin : IDalamudPlugin
         Model = new GreedyOpponent(this.Configuration.ModelEpsilon),
         ModelBand = view.Rules.Has(TriadRule.Chaos) ? ChaosModelBand : 0,
         Cache = this.Solved.Cache,
+        // Open Tournament (every ruleset has Draft): play on any hands rather than stall on NoBelief.
+        // Temporary, until reports show why the belief fails there (MovePolicy).
+        FallbackWithoutBelief = view.Rules.Has(TriadRule.Draft),
     };
 
     private void OnFrameworkUpdate(IFramework _)

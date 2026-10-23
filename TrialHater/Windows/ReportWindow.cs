@@ -14,7 +14,8 @@ public sealed class ReportWindow : Window
     private static readonly (ReportCategory Category, string Hint)[] Choices =
     [
         (ReportCategory.Stalled, "Auto play, a farming session or the tournament queue stopped doing anything."),
-        (ReportCategory.NoBelief, "Our turn, and the match panel showed a NoBelief warning instead of a move."),
+        (ReportCategory.NoBelief, "Our turn, and the match panel showed a NoBelief warning instead of a move.\n"
+                                  + "In an Open Tournament it plays anyway: the line under the move starts with FALLBACK: no belief."),
         (ReportCategory.SolveStalled, "'Solving...' ran far longer than usual, or never finished."),
         (ReportCategory.Other, "Anything else: a bad move, a wrong deck, a window left open... Say what in the box below."),
     ];

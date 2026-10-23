@@ -5,6 +5,16 @@ Notable changes are recorded here using the Keep a Changelog format and semantic
 
 ## Unreleased
 
+### Changed
+
+- Open Tournament: when no hand the opponent could hold fits what has been seen (NoBelief), the
+  plugin no longer stalls the match. It solves over random hands from the whole card list, without
+  the deck rarity limits (after a Sudden Death redeal or a Swap the opponent can hold our cards,
+  two 5-stars say, which no deck may), or failing that plays the card that captures most. The line
+  under the move starts with "FALLBACK: no belief", in orange, and the dispatch is logged. A
+  temporary measure: please report these (Report an issue picks NoBelief for them). Other matches
+  still stop on NoBelief, since there it means a wrong NPC or a misread card.
+
 ## [0.2.10] - 2026-10-23
 
 ### Fixed

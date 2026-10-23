@@ -29,8 +29,7 @@ public static class HandBelief
 
     public static BeliefResult Build(MatchView view, NpcDeck? npc, CardCatalog catalog)
     {
-        var redHand = view.Red.Select(s => s.State == SlotState.Visible ? s.Card : (CardStats?)null).ToArray();
-        var hiddenSlots = Enumerable.Range(0, view.Red.Length).Where(i => view.Red[i].State == SlotState.Hidden).ToList();
+        var (redHand, hiddenSlots) = Slots(view);
         if (hiddenSlots.Count == 0)
             return new BeliefResult([new Hypothesis(redHand, 1, "all red cards visible")], "red hand fully visible");
         // Draft replaces every deck, a tournament NPC's sheet deck included.
@@ -87,12 +86,29 @@ public static class HandBelief
         return Assemble(redHand, hiddenSlots, loose, $"{npc.Name}: any {hiddenSlots.Count} unseen pool card(s) (round {view.Round})");
     }
 
+    // Any hidden cards at all: hands sampled from the whole catalogue without the deck rarity limits.
+    // The policy's fallback when Build finds no hand (PolicyOptions.FallbackWithoutBelief): after a
+    // Sudden Death redeal or a Swap the opponent can hold our cards, two 5-stars say, which no deck
+    // may, so the limits reject every sample.
+    public static BeliefResult AnyHand(MatchView view, CardCatalog catalog)
+    {
+        var (redHand, hiddenSlots) = Slots(view);
+        return hiddenSlots.Count == 0
+            ? new BeliefResult([new Hypothesis(redHand, 1, "all red cards visible")], "red hand fully visible")
+            : SampleUnknown(view, redHand, hiddenSlots, catalog, rarityLimits: false);
+    }
+
+    private static (CardStats?[] RedHand, List<int> HiddenSlots) Slots(MatchView view)
+        => (view.Red.Select(s => s.State == SlotState.Visible ? s.Card : (CardStats?)null).ToArray(),
+            Enumerable.Range(0, view.Red.Length).Where(i => view.Red[i].State == SlotState.Hidden).ToList());
+
     // No deck data: sample complete hands from the whole catalogue instead of enumerating. Each sample
     // keeps the cards already shown and respects the deck rarity limits (at most one 5-star, at most
-    // two of 4+ stars, counting the opponent's seen cards). The seed comes from the view, so the
-    // same position always gets the same samples. Weaker than an NPC's exact enumeration (the
-    // decision is an average over a few plausible hands), and the status says so.
-    private static BeliefResult SampleUnknown(MatchView view, CardStats?[] redHand, List<int> hiddenSlots, CardCatalog catalog)
+    // two of 4+ stars, counting the opponent's seen cards) unless `rarityLimits` is off. The seed
+    // comes from the view, so the same position always gets the same samples. Weaker than an NPC's
+    // exact enumeration (the decision is an average over a few plausible hands), and the status
+    // says so.
+    private static BeliefResult SampleUnknown(MatchView view, CardStats?[] redHand, List<int> hiddenSlots, CardCatalog catalog, bool rarityLimits = true)
     {
         var cards = catalog.All.OrderBy(c => c.Id).ToList();
         if (cards.Count == 0)
@@ -116,13 +132,15 @@ public static class HandBelief
 
             var f5 = fives + pick.Count(c => c.Stars >= 5);
             var f4 = fours + pick.Count(c => c.Stars >= 4);
-            if (f5 <= 1 && f4 <= 2)
+            if (!rarityLimits || (f5 <= 1 && f4 <= 2))
                 unknowns.Add(pick.Select(c => c.Stats).ToList());
         }
 
         if (unknowns.Count == 0)
             return new BeliefResult([], "unknown opponent: no legal hand could be sampled");
-        return Assemble(redHand, hiddenSlots, unknowns, $"unknown opponent (no deck data): {unknowns.Count} sampled hand(s), lower confidence");
+        return Assemble(redHand, hiddenSlots, unknowns, rarityLimits
+            ? $"unknown opponent (no deck data): {unknowns.Count} sampled hand(s), lower confidence"
+            : $"any catalogue cards, deck rarity limits dropped: {unknowns.Count} sampled hand(s), lowest confidence");
     }
 
     // Draft: every deck is one card of each rarity (1-5 stars), and within a tournament all decks

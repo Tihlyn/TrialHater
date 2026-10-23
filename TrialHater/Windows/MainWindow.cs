@@ -407,7 +407,8 @@ public sealed class MainWindow : Window
         if (chosen.Exploit is { } exploit)
             chips.Add(($"vs NPC model {exploit:+0.00;-0.00;0.00}", Theme.Blue));
         Widgets.Chips(chips);
-        Widgets.Muted($"{decision.Hypotheses} NPC hand(s) · {decision.Nodes:N0} nodes · {decision.Elapsed.TotalMilliseconds:0} ms · {decision.Reason}");
+        var detail = $"{decision.Hypotheses} NPC hand(s) · {decision.Nodes:N0} nodes · {decision.Elapsed.TotalMilliseconds:0} ms · {decision.Reason}";
+        Widgets.Text(detail, decision.Reason.Contains("FALLBACK", StringComparison.Ordinal) ? Theme.Warn : Theme.Muted);
 
         if (!ImGui.CollapsingHeader($"All moves ({decision.Moves.Count})"))
             return;

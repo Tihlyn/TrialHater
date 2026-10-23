@@ -52,6 +52,13 @@ public sealed record PolicyOptions
 
     // Root values of early positions solved before (SolveCache), reused instead of solved again.
     public SolveCache? Cache { get; init; }
+
+    // Play rather than stall when no hand fits what has been seen: solve over hands of any catalogue
+    // cards instead (HandBelief.AnyHand), or failing that take the move that captures most now. The
+    // reason starts with FALLBACK. The plugin sets it for Open Tournaments only; elsewhere NoBelief
+    // means a wrong NPC or a mis-read card, and stopping is right. Temporary (2026-10-23) until
+    // reports show why the belief fails in tournaments.
+    public bool FallbackWithoutBelief { get; init; }
 }
 
 public sealed record MoveAssessment(Move Move, double ExpectedValue, double WorstValue, bool Safe, double? Exploit, int Captures);
@@ -94,6 +101,15 @@ public static class MovePolicy
             return new Decision(DecisionStatus.NoMove, null, [], 0, string.Empty, 0, clock.Elapsed, "Roulette has not resolved its rule yet", fingerprint);
 
         var belief = HandBelief.Build(view, npc, catalog);
+        var fallback = string.Empty;
+        if (!belief.Usable && options.FallbackWithoutBelief)
+        {
+            fallback = $"FALLBACK: no belief ({belief.Status}); ";
+            belief = HandBelief.AnyHand(view, catalog);
+            if (!belief.Usable)
+                return MostCaptures(view, $"{fallback}{belief.Status}", clock, fingerprint);
+        }
+
         if (!belief.Usable)
             return new Decision(DecisionStatus.NoBelief, null, [], 0, belief.Status, 0, clock.Elapsed, belief.Status, fingerprint);
 
@@ -150,10 +166,10 @@ public static class MovePolicy
         catch (OperationCanceledException) when (!cancel.IsCancellationRequested)
         {
             // Out of time on the exact half: say so and play the move that captures most now.
-            var fallback = legal.OrderByDescending(m => captures[m]).ThenBy(m => m.HandSlot).ThenBy(m => m.Cell).First();
+            var mostCaptures = legal.OrderByDescending(m => captures[m]).ThenBy(m => m.HandSlot).ThenBy(m => m.Cell).First();
             var partial = legal.Select(m => new MoveAssessment(m, double.NaN, double.NaN, true, null, captures[m])).OrderByDescending(a => a.Captures).ToList();
-            return new Decision(DecisionStatus.Ready, fallback, partial, hypotheses.Count, belief.Status, nodes, clock.Elapsed,
-                $"FALLBACK: exact search exceeded {options.SolveBudget.TotalSeconds:0}s; most immediate captures", fingerprint);
+            return new Decision(DecisionStatus.Ready, mostCaptures, partial, hypotheses.Count, belief.Status, nodes, clock.Elapsed,
+                $"{fallback}FALLBACK: exact search exceeded {options.SolveBudget.TotalSeconds:0}s; most immediate captures", fingerprint);
         }
         catch (OperationCanceledException)
         {
@@ -256,7 +272,7 @@ public static class MovePolicy
         if (cancel.IsCancellationRequested)
             return new Decision(DecisionStatus.Cancelled, null, [], hypotheses.Count, belief.Status, nodes, clock.Elapsed, "cancelled", fingerprint);
 
-        reason = cacheNote + sureNote + reason;
+        reason = fallback + cacheNote + sureNote + reason;
         var chosen = safe
             .OrderByDescending(m => exploit?.GetValueOrDefault(m, double.NegativeInfinity) ?? 0)
             .ThenByDescending(m => expected[m])
@@ -307,6 +323,20 @@ public static class MovePolicy
         }
 
         return safe.ToDictionary(m => m, m => Enumerable.Range(0, positions.Length).Sum(h => hypotheses[h].Weight * perHypothesis[h][m]));
+    }
+
+    // The fallback's last resort: no hand for the hidden cards at all, so the move that captures most
+    // now (the hidden slots stay empty: Blue's captures do not depend on them).
+    private static Decision MostCaptures(MatchView view, string why, Stopwatch clock, string fingerprint)
+    {
+        var position = view.ToPosition(view.Red.Select(s => s.State == SlotState.Visible ? s.Card : (CardStats?)null).ToArray());
+        var legal = position.LegalMoves().ToList();
+        if (legal.Count == 0)
+            return new Decision(DecisionStatus.NoMove, null, [], 0, why, 0, clock.Elapsed, "no legal move", fingerprint);
+        var captures = CaptureCounts(position, legal);
+        var move = legal.OrderByDescending(m => captures[m]).ThenBy(m => m.HandSlot).ThenBy(m => m.Cell).First();
+        var assessments = legal.Select(m => new MoveAssessment(m, double.NaN, double.NaN, true, null, captures[m])).OrderByDescending(a => a.Captures).ToList();
+        return new Decision(DecisionStatus.Ready, move, assessments, 0, why, 0, clock.Elapsed, $"{why}; most immediate captures", fingerprint);
     }
 
     // Cards Blue would own right after each move: the last tie-break, and shown in the UI.

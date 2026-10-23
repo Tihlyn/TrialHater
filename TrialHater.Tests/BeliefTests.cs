@@ -237,4 +237,49 @@ public class BeliefTests
         Assert.True(chosen.Safe);
         Assert.Equal(decision.Moves.Max(m => m.ExpectedValue), chosen.ExpectedValue, 9);
     }
+
+    // A Sudden Death round under Draft: hands are redealt from the board, so the opponent can hold
+    // two 5-star cards, which no deck may. Sampling it as an unknown opponent finds no hand.
+    private static MatchView RedealtTournamentRound()
+    {
+        var fives = Catalog.All.Where(c => c.Stars == 5).Select(c => c.Stats).Distinct().Take(2).ToArray();
+        var board = Board(B("1111"), R("1111"), B("2222"), R("2222"));
+        HandSlot[] blue = [HandSlot.Of(C("4234")), HandSlot.Of(C("3333")), HandSlot.Of(C("5555")), HandSlot.Empty, HandSlot.Empty];
+        HandSlot[] red = [HandSlot.Of(fives[0]), HandSlot.Of(fives[1]), HandSlot.Hidden, HandSlot.Empty, HandSlot.Empty];
+        return new MatchView(RuleSet.Of(TriadRule.Draft, TriadRule.SuddenDeath), board, blue, red, Side.Blue, Round: 1);
+    }
+
+    [Fact]
+    public void TournamentFallbackPlaysOnAnyHandsWhenNoHandFits()
+    {
+        var view = RedealtTournamentRound();
+        Assert.False(HandBelief.Build(view, null, Catalog).Usable);
+        Assert.Equal(DecisionStatus.NoBelief, MovePolicy.Decide(view, null, Catalog, new PolicyOptions()).Status);
+
+        var decision = MovePolicy.Decide(view, null, Catalog, new PolicyOptions { FallbackWithoutBelief = true });
+        Assert.Equal(DecisionStatus.Ready, decision.Status);
+        Assert.StartsWith("FALLBACK: no belief", decision.Reason);
+        Assert.Contains("rarity limits dropped", decision.Belief);
+        Assert.InRange(decision.Hypotheses, 1, HandBelief.UnknownOpponentSamples);
+        var move = decision.Move!.Value;
+        Assert.Null(view.Board[move.Cell]);
+        Assert.Equal(SlotState.Visible, view.Blue[move.HandSlot].State);
+    }
+
+    [Fact]
+    public void TournamentFallbackTakesTheMostCapturesWithoutAnyHand()
+    {
+        // No card list at all: not even a sampled hand. Only the centre touches both red cards (top
+        // and bottom edge), and the blue 9999 takes both from there.
+        var view = RedealtTournamentRound() with
+        {
+            Board = Board(null, R("1111"), null, null, null, null, B("1111"), R("2222"), B("1111")),
+            Blue = [HandSlot.Of(C("1111")), HandSlot.Of(C("9999")), HandSlot.Of(C("1111")), HandSlot.Empty, HandSlot.Empty],
+        };
+        var decision = MovePolicy.Decide(view, null, new CardCatalog([]), new PolicyOptions { FallbackWithoutBelief = true });
+        Assert.Equal(DecisionStatus.Ready, decision.Status);
+        Assert.StartsWith("FALLBACK: no belief", decision.Reason);
+        Assert.EndsWith("most immediate captures", decision.Reason);
+        Assert.Equal(new Move(1, 4), decision.Move);
+    }
 }

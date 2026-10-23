@@ -41,7 +41,9 @@ internal static class ReportSnapshot
     public static ReportCategory Suggest(Plugin plugin)
     {
         var analysis = plugin.Analysis;
-        if (plugin.Tracker.View is { } view && analysis.Latest is { Status: DecisionStatus.NoBelief } latest && latest.Fingerprint == view.Fingerprint())
+        // In a tournament NoBelief plays anyway (MovePolicy's FALLBACK); it is still what to report.
+        if (plugin.Tracker.View is { } view && analysis.Latest is { } latest && latest.Fingerprint == view.Fingerprint()
+            && (latest.Status == DecisionStatus.NoBelief || latest.Reason.StartsWith("FALLBACK: no belief", StringComparison.Ordinal)))
             return ReportCategory.NoBelief;
         if (analysis.Busy && (DateTime.UtcNow - analysis.StartedAt).TotalSeconds > plugin.Configuration.ExploitBudgetSeconds + 5)
             return ReportCategory.SolveStalled;
